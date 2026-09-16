@@ -1,0 +1,18 @@
+{
+  "$schema": "https://anthropic.com/claude-code/marketplace.schema.json",
+  "name": "16hands",
+  "description": "Plugins from 16 Hands for working on sites hosted on the 16h platform.",
+  "owner": {
+    "name": "16 Hands"
+  },
+  "plugins": [
+    {
+      "name": "16h-dev-agent",
+      "description": "Read a hosted site's live errors from the 16h platform, from inside your coding agent.",
+      "version": "1.0.0",
+      "source": "./",
+      "category": "productivity",
+      "homepage": "https://16h.io"
+    }
+  ]
+}

@@ -1,0 +1,8 @@
+{
+  "mcpServers": {
+    "16h": {
+      "type": "http",
+      "url": "https://mcp.16h.io/mcp"
+    }
+  }
+}
