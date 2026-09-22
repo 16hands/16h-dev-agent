@@ -31,9 +31,25 @@ this repository.
 | Tool | What it does |
 |---|---|
 | `read_errors` | Recent errors for one of your clients, across the whole fleet, newest first |
+| `plan_devsite` | Looks at the site running on your machine and proposes a devsite — name, PHP, what travels. Changes nothing |
+| `create_devsite` | Creates the devsite you confirmed, and hands back upload URLs |
+| `push_devsite` | Imports what you uploaded: code, database, media |
+| `site_status` | Where the devsite is up to, and the one-shot wp-admin login once it is live |
 
-Ask in plain language — "read recent errors for `<client>`" — rather than
-calling tools by name.
+Ask in plain language — "read recent errors for `<client>`", "put this
+WordPress on a devsite" — rather than calling tools by name.
+
+## Skills
+
+| Skill | When it applies |
+|---|---|
+| `16h-dev-agent` | Working on a hosted site: investigating a reported error, reading what the platform sees |
+| `devsite-import` | Putting a WordPress or Laravel site that runs on your machine onto a `*.devsite.co.nz` devsite, and pushing later changes to it |
+
+`devsite-import` teaches the whole path: finding the folder the site actually
+runs from, what to send and what to leave behind, the questions you get asked
+before anything is created, and the upload. Going **live** is not in it —
+that stays a click in the 16h panel.
 
 ## What it deliberately cannot do
 
