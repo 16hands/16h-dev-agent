@@ -1,7 +1,7 @@
 # 16h dev agent
 
 Your coding agent, with access to the other side of the work: the site as it
-actually runs on 16 Hands hosting.
+actually runs on 16Hands hosting.
 
 It reads a client's live errors from the platform's aggregated logs, so when
 someone says "a customer hit an error this morning" the agent can go and look
@@ -23,7 +23,7 @@ project — no config files, no per-repo setup.
 
 ## Signing in
 
-Access is invite-only: your contact at 16 Hands creates your login and chooses
+Access is invite-only: your contact at 16Hands creates your login and chooses
 which clients you can see. The first time a tool runs, a browser opens for you
 to sign in. There are no keys or tokens to copy, and nothing secret lives in
 this repository.
@@ -75,4 +75,4 @@ tool does not support Claude Code plugins.
 
 ## Support
 
-Talk to your contact at 16 Hands.
+Talk to your contact at 16Hands.

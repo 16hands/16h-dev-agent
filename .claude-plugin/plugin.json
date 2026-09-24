@@ -1,18 +1,20 @@
 {
   "name": "16h-dev-agent",
-  "description": "Tools for working on sites hosted by 16 Hands: read a client's live errors from the platform's aggregated logs, so an agent can diagnose a reported problem instead of guessing.",
-  "version": "1.0.0",
+  "description": "Your coding agent on the 16h platform: read a client's live errors, put a site running on your own machine onto a 16h devsite, push later changes to it. Production stays a person's click.",
+  "version": "1.1.0",
   "author": {
-    "name": "16 Hands"
+    "name": "16hands"
   },
   "homepage": "https://16h.io",
   "repository": "https://github.com/16hands/16h-dev-agent",
   "keywords": [
     "16h",
     "hosting",
+    "wordpress",
     "laravel",
+    "devsite",
+    "deploy",
     "logs",
-    "debugging",
     "mcp"
   ]
 }

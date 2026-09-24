@@ -1,6 +1,6 @@
 ---
 name: 16h-dev-agent
-description: Use when working on a site hosted by 16 Hands — "a client reports the site is down", "the site is slow", "it's erroring", "our emails are bouncing", "we got an error report", "customers can't check out", "check the logs", "what happened at 2pm", "why is the site 500ing", "is this happening in production?" — investigating an error a client reported, checking a site's behaviour, or diagnosing something that only shows up in production. Provides the 16h tools (logs_read, site_status, site_plan, site_create, site_push) and the discipline for using them; references/triage.md is the recipe for turning a client email into a fix, and the devsite-import skill is the path for "put this on a devsite" and "push my changes".
+description: Use when working on a site hosted by 16Hands — "a client reports the site is down", "the site is slow", "it's erroring", "our emails are bouncing", "we got an error report", "customers can't check out", "check the logs", "what happened at 2pm", "why is the site 500ing", "is this happening in production?" — investigating an error a client reported, checking a site's behaviour, or diagnosing something that only shows up in production. Provides the 16h tools (logs_read, site_status, site_plan, site_create, site_push) and the discipline for using them; references/triage.md is the recipe for turning a client email into a fix, and the devsite-import skill is the path for "put this on a devsite" and "push my changes".
 ---
 
 # Working on a 16h-hosted site
@@ -29,7 +29,7 @@ available yet; do not substitute a guess for it.
 ## What this does not give you
 
 No SSH, no database access, no filesystem on the servers. These tools are the
-whole surface. If a task genuinely needs more, the answer is to ask 16 Hands,
+whole surface. If a task genuinely needs more, the answer is to ask 16Hands,
 not to work around it.
 
 ## Deploys
