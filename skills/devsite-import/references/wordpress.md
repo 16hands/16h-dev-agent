@@ -136,7 +136,7 @@ has a restore point behind it. Say that when the `database` warning lands.
 - `site_status` carries `wp_admin_login_url` — **one-shot**. Hand it to the
   person; do not open it, and do not repeat it in a later message.
 - The devsite is `noindex` and password-protected by default. If they cannot
-  reach it, check the `httpauth` credentials from `create_devsite` first.
+  reach it, check the `httpauth` credentials from `site_create` first.
 - Later changes: rebuild `code.zip`, upload it to the same part, and
-  `push_devsite(parts=["code"])`. Code-only pushes take about twenty seconds
+  `site_push(parts=["code"])`. Code-only pushes take about twenty seconds
   and do not touch the database.

@@ -1,28 +1,28 @@
 ---
 name: devsite-import
-description: Use when someone wants a site that runs on their own machine put onto a 16h devsite — "put this WordPress on a devsite", "give me a staging URL for this", "host this so the client can look at it" — or wants to push a later change to a devsite they already made. Covers finding the real site root, collecting the local facts, the plan → confirm questions, building the upload parts, and the push.
+description: Use when someone wants a site that runs on their own machine put onto a 16h devsite — "put this on a devsite", "put this WordPress on a devsite", "give me a staging URL for this", "host this so the client can look at it" — or wants to push a later change to one they already made, as in "push my changes", "send the fix to the devsite", "redeploy the devsite". Covers finding the real site root, collecting the local facts, the plan → confirm questions, building the upload parts, and the push, with site_plan, site_create, site_push and site_status.
 ---
 
 # Put a local site on a devsite
 
 ```
-site root → local_facts → plan_devsite → ask the questions → create_devsite
-→ build the parts → upload → push_devsite → poll site_status → hand back the URL
+site root → local_facts → site_plan → ask the questions → site_create
+→ build the parts → upload → site_push → poll site_status → hand back the URL
 ```
 
 Read `references/wordpress.md` or `references/laravel.md` before step 1.
 
 ## Doctrine — the part people get wrong
 
-- **Never call a write tool without asking.** `create_devsite` and
-  `push_devsite` change hosting; `plan_devsite` and `site_status` are reads.
+- **Never call a write tool without asking.** `site_create` and `site_push`
+  change hosting; `site_plan` and `site_status` are reads.
 - **Defaults first** — the plan fills every answer in; you are confirming, not
   interviewing.
 - **One question per message**, in `questions[]` order, showing the default.
-- **Ask every question the plan returns.** Skipping one makes `create_devsite`
+- **Ask every question the plan returns.** Skipping one makes `site_create`
   refuse; inventing an answer puts a lie in the audit record.
-- **One `create_devsite` per `plan_id`, ever.** On `plan expired (30 min)` or
-  `defaults changed since the plan`, call `plan_devsite` again and re-ask what
+- **One `site_create` per `plan_id`, ever.** On `plan expired (30 min)` or
+  `defaults changed since the plan`, call `site_plan` again and re-ask what
   changed — never retry the old `plan_id`.
 - **A refusal is the truth about your access** and names the next move.
 
@@ -71,7 +71,7 @@ git_branch="$(git rev-parse --abbrev-ref HEAD 2>/dev/null)"
 Keys, exactly: `folder_name`, `siteurl`, `php`, `db_size_bytes`,
 `uploads_size_bytes`, `code_size_bytes`, `git` = {`present`, `remote_url`,
 `branch`, `shape`}. What you could not measure goes as `null`, never a guess.
-Then `plan_devsite(client?, app, local_facts)`, `app` = `wordpress`|`laravel`.
+Then `site_plan(client?, app, local_facts)`, `app` = `wordpress`|`laravel`.
 
 ## Step 4 — ask the plan's questions, then create
 
@@ -86,7 +86,7 @@ Then `plan_devsite(client?, app, local_facts)`, `app` = `wordpress`|`laravel`.
 | `protect` | password-protect it? |
 | `git_pull` | deploy from the remote on push? (only when step 2 allows) |
 
-`create_devsite(plan_id, answers)` returns `site_key`, `url`, an `uploads` map
+`site_create(plan_id, answers)` returns `site_key`, `url`, an `uploads` map
 of presigned POSTs (`code`, `database`, `uploads`), and `httpauth` **once** —
 show those credentials now; they are not retrievable later.
 
@@ -129,14 +129,14 @@ first and wait for a yes:**
 > This replaces the whole database on `<site>`. If it is WooCommerce that includes
 > orders, product changes and customer data. The previous database is kept as a restore point.
 
-`push_devsite(site_key, plan_id, parts)` returns a `task_id`. Then
+`site_push(site_key, plan_id, parts)` returns a `task_id`. Then
 `site_status(site_key, task_id?)` **every 10 seconds**:
 
 | `state` | Means | Do |
 |---|---|---|
-| `planned` | plan made, not confirmed | call `create_devsite` |
+| `planned` | plan made, not confirmed | call `site_create` |
 | `requested` | the site is being created | wait |
-| `accepted` | site and database exist | upload, then `push_devsite` |
+| `accepted` | site and database exist | upload, then `site_push` |
 | `refused` | creation was refused | read `message`; re-plan or stop |
 | `pushing` | the deploy lane is running | keep polling |
 | `applied` | live on the devsite URL | hand back `url` + `wp_admin_login_url` |

@@ -30,10 +30,10 @@ this repository.
 
 | Tool | What it does |
 |---|---|
-| `read_errors` | Recent errors for one of your clients, across the whole fleet, newest first |
-| `plan_devsite` | Looks at the site running on your machine and proposes a devsite — name, PHP, what travels. Changes nothing |
-| `create_devsite` | Creates the devsite you confirmed, and hands back upload URLs |
-| `push_devsite` | Imports what you uploaded: code, database, media |
+| `logs_read` | Recent errors for one of your clients, across the whole fleet, newest first |
+| `site_plan` | Looks at the site running on your machine and proposes a devsite — name, PHP, what travels. Changes nothing |
+| `site_create` | Creates the devsite you confirmed, and hands back upload URLs |
+| `site_push` | Imports what you uploaded: code, database, media |
 | `site_status` | Where the devsite is up to, and the one-shot wp-admin login once it is live |
 
 Ask in plain language — "read recent errors for `<client>`", "put this

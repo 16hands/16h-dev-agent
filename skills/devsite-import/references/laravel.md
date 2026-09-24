@@ -104,6 +104,6 @@ person answers `rewrite_urls`, and fix it in the app's own data afterwards.
   URL and, when the deploy failed, the lane's own message.
 - Migrations are not run by the import. If the app needs them, say so; that is
   a job for the panel or the client's own deploy script today.
-- Later changes: rebuild `code.zip` and `push_devsite(parts=["code"])`, or, if
+- Later changes: rebuild `code.zip` and `site_push(parts=["code"])`, or, if
   the dev said yes to `git_pull`, let the pull lane serve it.
 - Going live is never reachable from these tools — it is a click in the panel.
