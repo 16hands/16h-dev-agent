@@ -3,9 +3,11 @@
 Your coding agent, with access to the other side of the work: the site as it
 actually runs on 16 Hands hosting.
 
-Today it reads a client's live errors from the platform's aggregated logs, so
-when someone says "a customer hit an error this morning" the agent can go and
-look instead of guessing. Staged deploys and post-deploy checks follow.
+It reads a client's live errors from the platform's aggregated logs, so when
+someone says "a customer hit an error this morning" the agent can go and look
+instead of guessing — and it puts a site that runs on the dev's own machine
+onto a 16h devsite, then pushes later changes to it. Production stays a
+person's click in the panel.
 
 ## Install
 
