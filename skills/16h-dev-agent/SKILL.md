@@ -26,6 +26,22 @@ refuse by name — so "the emails are bouncing" is answerable only as far as the
 application's own errors go. Say which kind you wanted and that it is not
 available yet; do not substitute a guess for it.
 
+## Checking a site over HTTP
+
+Every 16h site sits behind a WAF that blocks bare `curl` (Bot Control): a
+request with no browser `User-Agent` gets **403 from the load balancer**, and
+that 403 says nothing about the site. Always send a full browser UA and
+follow redirects:
+
+```bash
+curl -sS -L -A "Mozilla/5.0 (Macintosh; Intel Mac OS X 14_6) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.6 Safari/605.1.15" \
+  -o /dev/null -w '%{http_code} %{url_effective}\n' "https://$SITE/"
+```
+
+Read the answer with `site_status` beside it: a 403 with a full UA is the
+site's own (an empty docroot, an allow-list); a 500 is PHP, and `logs_read`
+has the reason. A short UA such as `Mozilla/5.0` is still blocked.
+
 ## What this does not give you
 
 No SSH, no database access, no filesystem on the servers. These tools are the

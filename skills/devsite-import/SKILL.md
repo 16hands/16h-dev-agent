@@ -130,7 +130,9 @@ first and wait for a yes:**
 > orders, product changes and customer data. The previous database is kept as a restore point.
 
 `site_push(site_key, plan_id, parts)` returns a `task_id`. Then
-`site_status(site_key, task_id?)` **every 10 seconds**:
+`site_status(site_key, task_id?)` **every 10 seconds** (never `curl` the URL
+as the test of `applied` — the WAF 403s a bare curl; see the 16h-dev-agent
+skill's "Checking a site over HTTP" for the UA to send):
 
 | `state` | Means | Do |
 |---|---|---|
