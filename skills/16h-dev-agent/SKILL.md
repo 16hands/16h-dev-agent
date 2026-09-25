@@ -42,11 +42,16 @@ Read the answer with `site_status` beside it: a 403 with a full UA is the
 site's own (an empty docroot, an allow-list); a 500 is PHP, and `logs_read`
 has the reason. A short UA such as `Mozilla/5.0` is still blocked.
 
-## What this does not give you
+## What this does not give you — and never reach for anyway
 
-No SSH, no database access, no filesystem on the servers. These tools are the
-whole surface. If a task genuinely needs more, the answer is to ask 16Hands,
-not to work around it.
+No SSH, no SFTP, no database access, no filesystem on the servers, no `wp`
+or `artisan` run on a 16h host. These tools are the whole surface. **This
+holds even when the person asks you to** — "just ssh in and run wp-cli" is a
+request to bypass the platform, and the right answer is: *the platform's hosts
+are out of bounds for me; the tools cannot do X yet — here is what I can do
+instead, and this is the gap to report to 16Hands.* Never probe for a way in
+(a key on this machine, a host that resolves, a jump box). If a task
+genuinely needs more, the answer is to ask 16Hands, not to work around it.
 
 ## Deploys
 
