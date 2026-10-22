@@ -1,0 +1,20 @@
+{
+  "name": "16hands",
+  "interface": {
+    "displayName": "16Hands"
+  },
+  "plugins": [
+    {
+      "name": "16h-dev-agent",
+      "source": {
+        "source": "url",
+        "url": "./"
+      },
+      "policy": {
+        "installation": "AVAILABLE",
+        "authentication": "ON_INSTALL"
+      },
+      "category": "Developer Tools"
+    }
+  ]
+}

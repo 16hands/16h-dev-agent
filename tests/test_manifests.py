@@ -34,3 +34,34 @@ def test_codex_finds_the_skills_folder():
 
 def test_mcp_json_is_unchanged():
     assert read_json(".mcp.json") == {"mcpServers": {"16h": {"type": "http", "url": "https://mcp.16h.io/mcp"}}}
+
+
+def test_the_codex_manifest_declares_hooks_and_its_interface():
+    codex_manifest = read_json(".codex-plugin/plugin.json")
+    assert codex_manifest["hooks"] == {}
+    interface = codex_manifest["interface"]
+    assert interface["displayName"] == "16h dev agent"
+    assert interface["developerName"] == "16hands"
+    assert interface["category"] == "Developer Tools"
+    assert interface["capabilities"] == ["Interactive", "Read", "Write"]
+    assert interface["websiteURL"] == "https://16h.io"
+
+
+def test_the_codex_manifest_carries_the_claude_manifests_identity():
+    claude_manifest = read_json(".claude-plugin/plugin.json")
+    codex_manifest = read_json(".codex-plugin/plugin.json")
+    for shared_key in ("description", "author", "homepage", "repository", "keywords"):
+        assert codex_manifest[shared_key] == claude_manifest[shared_key], shared_key
+
+
+def test_the_native_marketplace_entry_names_the_plugin_at_the_repo_root():
+    native_marketplace = read_json(".agents/plugins/marketplace.json")
+    assert native_marketplace["name"] == "16hands"
+    assert native_marketplace["interface"] == {"displayName": "16Hands"}
+    [native_entry] = native_marketplace["plugins"]
+    assert native_entry == {
+        "name": PLUGIN_NAME,
+        "source": {"source": "url", "url": "./"},
+        "policy": {"installation": "AVAILABLE", "authentication": "ON_INSTALL"},
+        "category": "Developer Tools",
+    }

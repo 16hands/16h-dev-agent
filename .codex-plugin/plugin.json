@@ -2,5 +2,41 @@
   "name": "16h-dev-agent",
   "version": "2.0.0",
   "description": "Your coding agent on the 16h platform: it knows which site this repo is, reads the live errors and traffic, pushes to staging, and releases to production behind the panel's toggle.",
-  "skills": "./skills/"
+  "author": {
+    "name": "16hands"
+  },
+  "homepage": "https://16h.io",
+  "repository": "https://github.com/16hands/16h-dev-agent",
+  "keywords": [
+    "16h",
+    "hosting",
+    "wordpress",
+    "laravel",
+    "devsite",
+    "deploy",
+    "logs",
+    "mcp",
+    "codex",
+    "staging",
+    "production"
+  ],
+  "skills": "./skills/",
+  "hooks": {},
+  "interface": {
+    "displayName": "16h dev agent",
+    "shortDescription": "Your coding agent on the 16h platform — status, live errors, staging, production",
+    "longDescription": "Your coding agent on the 16h platform: it knows which site this repo is, reads the live errors and traffic, pushes to staging, and releases to production behind the panel's toggle. Every session opens with this site's status on 16h, and a skill named for the moment takes over when the site is erroring, when you ask who is hitting it, when you push to staging, when you release to production, and after every push.",
+    "developerName": "16hands",
+    "category": "Developer Tools",
+    "capabilities": [
+      "Interactive",
+      "Read",
+      "Write"
+    ],
+    "defaultPrompt": [
+      "What is this site's status on 16h?",
+      "The client says the site is erroring."
+    ],
+    "websiteURL": "https://16h.io"
+  }
 }
