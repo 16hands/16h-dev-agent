@@ -12,6 +12,10 @@ panel, and only after you have said yes to what will change.
 
 ## Install
 
+You need `python3` (3.7 or later) and `git` on your PATH — on Windows, Git
+Bash. Without them a session still starts, but silently without your repo's
+facts: only the introduction to 16h arrives.
+
 In Claude Code:
 
 ```
@@ -19,7 +23,7 @@ In Claude Code:
 /plugin install 16h-dev-agent@16hands
 ```
 
-In Codex:
+For Codex, in your terminal:
 
 ```
 codex plugin marketplace add 16hands/16h-dev-agent
@@ -28,15 +32,16 @@ codex plugin marketplace add 16hands/16h-dev-agent
 then, inside Codex:
 
 1. `/plugins` → install **16h-dev-agent**.
-2. `/hooks` → trust the 16h-dev-agent session-start hook. You do this once.
+2. `/hooks` → trust the 16h-dev-agent session-start hook. You do this once,
+   and again if an update changes the hook.
 
 Do not skip step 2. Codex runs no plugin hook until you have trusted it, and
 without the hook a session starts knowing nothing about your repo: no first
 call to 16h, no project named, until you ask.
 
-Either way, that installs the hook, the skills and the connection to 16h.
-Nothing is added to your project to make it work — no config files, no
-per-repo setup.
+In Claude Code and in Codex alike, the install brings the hook, the skills
+and the connection to 16h. Nothing is added to your project to make it work —
+no config files, no per-repo setup.
 
 ## Signing in
 

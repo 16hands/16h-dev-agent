@@ -437,6 +437,11 @@ def test_a_non_site_gets_the_intro_alone(tmp_path):
     assert context.endswith("</EXTREMELY_IMPORTANT>")
 
 
+def test_the_wrapper_names_no_tool_that_only_one_agent_has(tmp_path):
+    make_not_a_site(tmp_path)
+    assert "Skill tool" not in injected_context(tmp_path)
+
+
 def test_the_hook_takes_cwd_from_stdin_not_from_where_it_runs(tmp_path):
     site_folder = tmp_path / "the-site-named-in-stdin"
     make_wordpress(site_folder)

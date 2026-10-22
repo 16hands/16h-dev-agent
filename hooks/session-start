@@ -104,7 +104,7 @@ escape_for_json() {
 }
 
 using_16h_escaped=$(escape_for_json "$using_16h_content")
-session_context="<EXTREMELY_IMPORTANT>\nYou are working with the 16h platform.\n\n**Below is your 'using-16h' skill. For the other 16h skills, use the Skill tool:**\n\n${using_16h_escaped}\n</EXTREMELY_IMPORTANT>"
+session_context="<EXTREMELY_IMPORTANT>\nYou are working with the 16h platform.\n\n**Your 'using-16h' skill is below. Load each other 16h skill by name when its moment comes.**\n\n${using_16h_escaped}\n</EXTREMELY_IMPORTANT>"
 if [ -n "$project_block" ]; then
   project_block_escaped=$(escape_for_json "$project_block")
   session_context="${session_context}\n\n${project_block_escaped}"

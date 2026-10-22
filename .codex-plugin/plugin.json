@@ -21,7 +21,8 @@
     "production"
   ],
   "skills": "./skills/",
-  "hooks": {},
+  "mcpServers": "./.mcp.json",
+  "hooks": "./hooks/hooks.json",
   "interface": {
     "displayName": "16h dev agent",
     "shortDescription": "Your coding agent on the 16h platform — status, live errors, staging, production",

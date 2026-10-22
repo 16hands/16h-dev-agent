@@ -36,9 +36,17 @@ def test_mcp_json_is_unchanged():
     assert read_json(".mcp.json") == {"mcpServers": {"16h": {"type": "http", "url": "https://mcp.16h.io/mcp"}}}
 
 
+def test_the_codex_manifest_declares_its_mcp_server():
+    codex_manifest = read_json(".codex-plugin/plugin.json")
+    assert codex_manifest["mcpServers"] == "./.mcp.json"
+    assert (PLUGIN_ROOT / codex_manifest["mcpServers"]).is_file()
+
+
 def test_the_codex_manifest_declares_hooks_and_its_interface():
     codex_manifest = read_json(".codex-plugin/plugin.json")
-    assert codex_manifest["hooks"] == {}
+    # superpowers 7.0.0 RELEASE-NOTES (v6.1.1): Codex reads `hooks: {}` as "no hooks", so the path is spelled out.
+    assert codex_manifest["hooks"] == "./hooks/hooks.json"
+    assert (PLUGIN_ROOT / codex_manifest["hooks"]).is_file()
     interface = codex_manifest["interface"]
     assert interface["displayName"] == "16h dev agent"
     assert interface["developerName"] == "16hands"
