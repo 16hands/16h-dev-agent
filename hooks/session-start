@@ -1,0 +1,154 @@
+#!/usr/bin/env bash
+# SessionStart hook for the 16h-dev-agent plugin: injects the 'using-16h' skill
+# and, when the folder is a 16h site, that repo's facts and the one instruction.
+# Shape, escape_for_json and emit_json are copied from the superpowers 7.0.0
+# session-start hook (MIT).
+#
+# Never blocks a session: no `set -e`, every step that fails degrades to the
+# intro alone, and the exit status is 0 on every path. Writes no file, asks
+# nothing, and calls no network.
+
+set -uo pipefail
+
+# Determine plugin root directory.
+# Splits $0 on its last / or \ (run-hook.cmd's cmd half passes a Windows
+# path), with no separator meaning the current directory. This avoids
+# dirname because a SessionStart:startup hook can run with a broken/empty
+# PATH (anthropics/claude-code#43127) before any PATH-repairing sibling hook
+# in the same startup batch takes effect.
+case "$0" in
+  */*|*\\*) SCRIPT_DIR="$(cd "${0%[/\\]*}" && pwd)" ;;
+  *) SCRIPT_DIR="$(pwd)" ;;
+esac
+PLUGIN_ROOT="$(cd "${SCRIPT_DIR}/.." && pwd)"
+
+# Read using-16h content via bash's builtin $(< file) instead of cat, for the
+# same PATH-independence reason.
+skill_md="${PLUGIN_ROOT}/skills/using-16h/SKILL.md"
+if [ -r "$skill_md" ]; then
+  using_16h_content="$(<"$skill_md")"
+else
+  using_16h_content="Error reading using-16h skill"
+fi
+
+# The harness hands the hook one JSON object on stdin: {"cwd": ..., "source": ...}.
+# Read it once, with the read builtin (no cat). A terminal means someone ran
+# the hook by hand, so there is nothing to wait for.
+hook_input=""
+if [ ! -t 0 ]; then
+  IFS= read -r -d '' hook_input  # returns 1 at end of input; the text is already in hook_input
+fi
+
+# Python reads the JSON, asks recon.py about the folder, and lays out the
+# project block. -I keeps the project's own folder (the hook's working
+# directory) and PYTHONPATH off sys.path, so a json.py planted in a cloned
+# repo is never imported by a session start.
+read_cwd_program='
+import json
+import sys
+
+try:
+    hook_payload = json.load(sys.stdin)
+    working_directory = hook_payload.get("cwd") if isinstance(hook_payload, dict) else None
+    if isinstance(working_directory, str):
+        print(working_directory)
+except Exception:
+    pass
+'
+
+write_project_block_program='
+import json
+import sys
+
+try:
+    facts = json.load(sys.stdin)
+    if facts.get("is_site") is True:
+        repo_json = json.dumps(facts["repo"], indent=2)
+        working_tree = "dirty" if facts.get("dirty") else "clean"
+        shape = facts.get("shape") or "unknown"
+        local_php = facts.get("php") or "unknown"
+        print(
+            "## This project\n\n"
+            "```json\n" + repo_json + "\n```\n\n"
+            f"Working tree: {working_tree}. Shape: {shape}. Local PHP: {local_php}.\n\n"
+            "Your first tool call on any 16h task is site_status with this repo block as its repo argument. "
+            "Name the project and its situation back to the developer before doing anything else.",
+            end="",
+        )
+except Exception:
+    pass
+'
+
+working_directory="$PWD"
+project_block=""
+if command -v python3 >/dev/null 2>&1; then
+  cwd_from_input="$(printf '%s' "$hook_input" | python3 -I -c "$read_cwd_program" 2>/dev/null)"
+  if [ -n "$cwd_from_input" ]; then
+    working_directory="$cwd_from_input"
+  fi
+  recon_json="$(python3 -I "${SCRIPT_DIR}/recon.py" "$working_directory" 2>/dev/null)"
+  project_block="$(printf '%s' "$recon_json" | python3 -I -c "$write_project_block_program" 2>/dev/null)"
+fi
+
+# Escape string for JSON embedding using bash parameter substitution.
+# Each ${s//old/new} is a single C-level pass - orders of magnitude
+# faster than the character-by-character loop this replaces.
+escape_for_json() {
+    local s="$1"
+    s="${s//\\/\\\\}"
+    s="${s//\"/\\\"}"
+    s="${s//$'\n'/\\n}"
+    s="${s//$'\r'/\\r}"
+    s="${s//$'\t'/\\t}"
+    printf '%s' "$s"
+}
+
+using_16h_escaped=$(escape_for_json "$using_16h_content")
+session_context="<EXTREMELY_IMPORTANT>\nYou are working with the 16h platform.\n\n**Below is your 'using-16h' skill. For the other 16h skills, use the Skill tool:**\n\n${using_16h_escaped}\n</EXTREMELY_IMPORTANT>"
+if [ -n "$project_block" ]; then
+  project_block_escaped=$(escape_for_json "$project_block")
+  session_context="${session_context}\n\n${project_block_escaped}"
+fi
+
+# Output context injection as JSON.
+# Cursor hooks expect additional_context (snake_case).
+# Claude Code hooks expect hookSpecificOutput.additionalContext (nested).
+# Copilot CLI (v1.0.11+) and others expect additionalContext (top-level, SDK standard).
+# Claude Code reads BOTH additional_context and hookSpecificOutput without
+# deduplication, so we must emit only the field the current platform consumes.
+# Muse sets MUSE_PLUGIN_ROOT and expects additionalContext (SDK standard).
+#
+# Uses printf instead of heredoc to work around bash 5.3+ heredoc hang.
+# See: https://github.com/obra/superpowers/issues/571
+#
+# emit_json pipes printf through `cat` when cat is on PATH, to absorb EPIPE
+# on Windows. On Windows + Git Bash, the harness can close the hook's stdout
+# before printf finishes, and Git Bash's printf reports that EPIPE as
+# "printf: write error: Permission denied". Letting cat receive the EPIPE
+# keeps it out of the hook's error path (#1612). When PATH is broken and cat
+# can't be found (#2310), it falls back to printf alone so context still
+# gets injected.
+emit_json() {
+  # shellcheck disable=SC2059 # every caller passes a literal format string
+  if command -v cat >/dev/null 2>&1; then
+    printf "$@" | cat
+  else
+    printf "$@"
+  fi
+}
+
+if [ -n "${CURSOR_PLUGIN_ROOT:-}" ]; then
+  # Cursor sets CURSOR_PLUGIN_ROOT (may also set CLAUDE_PLUGIN_ROOT)
+  emit_json '{\n  "additional_context": "%s"\n}\n' "$session_context"
+elif [ -n "${CLAUDE_PLUGIN_ROOT:-}" ] && [ -z "${COPILOT_CLI:-}" ] && [ -z "${MUSE_PLUGIN_ROOT:-}" ]; then
+  # Claude Code sets CLAUDE_PLUGIN_ROOT without COPILOT_CLI/MUSE_PLUGIN_ROOT
+  emit_json '{\n  "hookSpecificOutput": {\n    "hookEventName": "SessionStart",\n    "additionalContext": "%s"\n  }\n}\n' "$session_context"
+elif [ -n "${MUSE_PLUGIN_ROOT:-}" ]; then
+  # Muse sets MUSE_PLUGIN_ROOT — try Claude-style nested output for Muse Spark
+  emit_json '{\n  "hookSpecificOutput": {\n    "hookEventName": "SessionStart",\n    "additionalContext": "%s"\n  }\n}\n' "$session_context"
+else
+  # Copilot CLI (sets COPILOT_CLI=1) or unknown platform — SDK standard format
+  emit_json '{\n  "additionalContext": "%s"\n}\n' "$session_context"
+fi
+
+exit 0

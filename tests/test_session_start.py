@@ -1,12 +1,14 @@
 import importlib.util
 import json
 import os
+import shutil
 import subprocess
 import sys
 import time
 from pathlib import Path
 
 RECON = Path(__file__).resolve().parents[1] / "hooks" / "recon.py"
+HOOK = Path(__file__).resolve().parents[1] / "hooks" / "session-start"
 DEFAULT_REMOTE = "git@github.com:ake/site.git"
 REPO_KEYS = ["remote_url", "root_commit", "branch", "hostnames", "folder_name", "app"]
 
@@ -376,3 +378,161 @@ def test_recon_is_fast(tmp_path):
     make_wordpress(tmp_path)
     started = time.monotonic(); recon(tmp_path)
     assert time.monotonic() - started < 1.0
+
+
+PLATFORM_VARIABLES = ("CLAUDE_PLUGIN_ROOT", "CURSOR_PLUGIN_ROOT", "COPILOT_CLI", "MUSE_PLUGIN_ROOT")
+
+
+def hook_environment(*, with_claude_plugin_root=True):
+    environment = {name: value for name, value in os.environ.items() if name not in PLATFORM_VARIABLES}
+    if with_claude_plugin_root:
+        environment["CLAUDE_PLUGIN_ROOT"] = str(HOOK.parents[1])
+    return environment
+
+
+def run_hook_process(*, stdin_text, environment=None, hook=HOOK, working_directory="/", interpreter="bash"):
+    completed = subprocess.run(
+        [interpreter, str(hook)], input=stdin_text, capture_output=True, encoding="utf-8",
+        env=hook_environment() if environment is None else environment,
+        cwd=working_directory, timeout=5,
+    )
+    assert completed.returncode == 0 and completed.stderr == "", completed.stderr
+    return completed
+
+
+def run_hook(cwd, *, environment=None, hook=HOOK):
+    stdin_text = json.dumps({"cwd": str(cwd), "source": "startup"})
+    return json.loads(run_hook_process(stdin_text=stdin_text, environment=environment, hook=hook).stdout)
+
+
+def injected_context(cwd):
+    return run_hook(cwd)["hookSpecificOutput"]["additionalContext"]
+
+
+def copy_plugin(destination, *, with_recon, with_skill):
+    (destination / "hooks").mkdir(parents=True)
+    shutil.copy(HOOK, destination / "hooks" / "session-start")
+    if with_recon:
+        shutil.copy(RECON, destination / "hooks" / "recon.py")
+    if with_skill:
+        shutil.copytree(HOOK.parents[1] / "skills" / "using-16h", destination / "skills" / "using-16h")
+    return destination / "hooks" / "session-start"
+
+
+def test_the_hook_injects_the_intro_and_the_project_block(tmp_path):
+    make_wordpress(tmp_path)
+    context = injected_context(tmp_path)
+    assert "name: using-16h" in context and "## This project" in context
+    assert context.index("</EXTREMELY_IMPORTANT>") < context.index("## This project")
+    assert '"remote_url": "git@github.com:ake/site.git"' in context
+    assert "```json\n{\n" in context
+    assert "first tool call on any 16h task is site_status" in context
+
+
+def test_a_non_site_gets_the_intro_alone(tmp_path):
+    make_not_a_site(tmp_path)
+    context = injected_context(tmp_path)
+    assert "name: using-16h" in context and "## This project" not in context
+    assert context.startswith("<EXTREMELY_IMPORTANT>\nYou are working with the 16h platform.")
+    assert context.endswith("</EXTREMELY_IMPORTANT>")
+
+
+def test_the_hook_takes_cwd_from_stdin_not_from_where_it_runs(tmp_path):
+    site_folder = tmp_path / "the-site-named-in-stdin"
+    make_wordpress(site_folder)
+    context = injected_context(site_folder)
+    assert '"folder_name": "the-site-named-in-stdin"' in context
+
+
+def test_the_working_tree_line_says_dirty_or_clean_with_shape_and_php(tmp_path):
+    make_wordpress(tmp_path)
+    assert "Working tree: clean. Shape: whole_tree. Local PHP: " in injected_context(tmp_path)
+    (tmp_path / "unsaved-change.txt").write_text("not committed\n")
+    assert "Working tree: dirty. Shape: whole_tree. Local PHP: " in injected_context(tmp_path)
+
+
+def test_the_output_is_under_budget(tmp_path):
+    make_wordpress(tmp_path)
+    assert len(injected_context(tmp_path)) < 8000
+
+
+def test_without_a_plugin_root_variable_the_sdk_shape_is_used(tmp_path):
+    make_wordpress(tmp_path)
+    output = run_hook(tmp_path, environment=hook_environment(with_claude_plugin_root=False))
+    assert list(output) == ["additionalContext"]
+    assert "name: using-16h" in output["additionalContext"] and "## This project" in output["additionalContext"]
+
+
+def test_without_python3_the_intro_still_arrives(tmp_path):
+    site_folder = tmp_path / "site"
+    make_wordpress(site_folder)
+    bin_folder = tmp_path / "bin"
+    bin_folder.mkdir()
+    for tool in ("bash", "git"):
+        (bin_folder / tool).symlink_to(shutil.which(tool))
+    assert shutil.which("python3", path=str(bin_folder)) is None
+    environment = {**hook_environment(), "PATH": str(bin_folder)}
+    completed = run_hook_process(stdin_text=json.dumps({"cwd": str(site_folder)}), environment=environment,
+                                 interpreter=str(bin_folder / "bash"))
+    context = json.loads(completed.stdout)["hookSpecificOutput"]["additionalContext"]
+    assert "name: using-16h" in context and "## This project" not in context
+    assert "Traceback" not in completed.stdout
+
+
+def test_malformed_stdin_falls_back_to_the_folder_the_hook_runs_in(tmp_path):
+    make_wordpress(tmp_path)
+    for stdin_text in ("this is not json", "", "[1, 2]", '{"cwd": 7}'):
+        completed = run_hook_process(stdin_text=stdin_text, working_directory=tmp_path)
+        context = json.loads(completed.stdout)["hookSpecificOutput"]["additionalContext"]
+        assert "name: using-16h" in context
+        assert f'"folder_name": "{tmp_path.name}"' in context
+
+
+def test_a_json_py_planted_in_the_project_is_never_run_by_a_session_start(tmp_path):
+    make_wordpress(tmp_path)
+    marker_file = tmp_path.parent / f"{tmp_path.name}-planted-json-ran"
+    (tmp_path / "json.py").write_text(f"import pathlib\npathlib.Path({str(marker_file)!r}).touch()\n")
+    run_hook_process(stdin_text=json.dumps({"cwd": str(tmp_path)}), working_directory=tmp_path)
+    assert not marker_file.exists()
+
+
+def test_a_plugin_without_recon_py_still_delivers_the_intro(tmp_path):
+    make_wordpress(tmp_path / "site")
+    hook_without_recon = copy_plugin(tmp_path / "plugin", with_recon=False, with_skill=True)
+    context = run_hook(tmp_path / "site", hook=hook_without_recon)["hookSpecificOutput"]["additionalContext"]
+    assert "name: using-16h" in context and "## This project" not in context
+
+
+def test_a_plugin_without_its_skill_file_still_emits_valid_json(tmp_path):
+    make_wordpress(tmp_path / "site")
+    hook_without_skill = copy_plugin(tmp_path / "plugin", with_recon=True, with_skill=False)
+    context = run_hook(tmp_path / "site", hook=hook_without_skill)["hookSpecificOutput"]["additionalContext"]
+    assert "Error reading using-16h skill" in context
+    assert "## This project" in context
+
+
+def test_run_hook_cmd_launches_the_hook(tmp_path):
+    make_wordpress(tmp_path)
+    completed = subprocess.run(
+        ["bash", str(HOOK.parent / "run-hook.cmd"), "session-start"],
+        input=json.dumps({"cwd": str(tmp_path), "source": "startup"}), capture_output=True, encoding="utf-8",
+        env=hook_environment(), cwd="/", timeout=5,
+    )
+    assert completed.returncode == 0 and completed.stderr == ""
+    assert json.loads(completed.stdout) == run_hook(tmp_path)
+
+
+def test_the_hook_writes_nothing_and_is_fast(tmp_path):
+    make_wordpress(tmp_path)
+    before = sorted(path.relative_to(tmp_path) for path in tmp_path.rglob("*"))
+    started = time.monotonic(); run_hook(tmp_path)
+    assert time.monotonic() - started < 1.0
+    assert sorted(path.relative_to(tmp_path) for path in tmp_path.rglob("*")) == before
+
+
+def test_hooks_json_matches_on_resume_and_compact():
+    hooks = json.loads((HOOK.parent / "hooks.json").read_text())
+    assert hooks["hooks"]["SessionStart"][0]["matcher"] == "startup|resume|clear|compact"
+    command_hook = hooks["hooks"]["SessionStart"][0]["hooks"][0]
+    assert command_hook == {"type": "command", "command": "\"${CLAUDE_PLUGIN_ROOT}/hooks/run-hook.cmd\" session-start",
+                            "shell": "bash", "async": False}
