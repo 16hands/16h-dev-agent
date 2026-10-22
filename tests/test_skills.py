@@ -95,8 +95,24 @@ def deployignore_patterns(reference_path):
     return [line.strip() for line in fenced_block.splitlines() if line.strip()]
 
 
+def build_block(reference_path):
+    """The first bash block under a reference's *Building the parts* heading."""
+    building = reference_path.read_text().split("## Building the parts", 1)[1]
+    return building.split("```bash", 1)[1].split("```", 1)[0]
+
+
+def markdown_section(text, heading):
+    """A markdown text from `heading` to the next level-two heading."""
+    return text.split(heading, 1)[1].split("\n## ", 1)[0]
+
+
 def test_the_references_cover_the_wave_a_apps_and_nothing_else():
     assert sorted(path.name for path in PUSHING_REFERENCES.glob("*.md")) == sorted(REFERENCES)
+
+
+@pytest.mark.parametrize("reference", REFERENCES)
+def test_each_reference_stays_under_160_lines(reference):
+    assert len((PUSHING_REFERENCES / reference).read_text().splitlines()) < 160
 
 
 @pytest.mark.parametrize("reference", REFERENCES)
@@ -129,20 +145,45 @@ def test_laravel_ships_vendor_and_the_storage_skeleton():
     assert [pattern for pattern in patterns if pattern.startswith(("vendor", "storage/*", "storage/framework"))] == []
 
 
+ADD_EXAMPLE_BACK = '[ -f .env.example ] && zip -q "$parts_folder/code.zip" .env.example'
+
+
 @pytest.mark.parametrize("reference", ("laravel.md", "statamic.md", "symfony.md"))
-def test_each_framework_reference_keeps_every_env_file_out_of_the_zip(reference):
+def test_each_framework_reference_keeps_every_env_file_and_composer_token_out_of_the_zip(reference):
+    # Ruling P-R6: the zip reads the working tree, where .env.production, .env.backup and .env.staging hold
+    # real secrets and auth.json holds composer's tokens, so .env.* and auth.json stay out.
     patterns = deployignore_patterns(PUSHING_REFERENCES / reference)
-    assert {".env", ".env.16h", ".env.local", ".env.*.local"} <= set(patterns)
-    # The platform's env writer reads <release>/.env.example as its third layer, so it must travel.
-    assert ".env.*" not in patterns and ".env.example" not in patterns
+    assert {".env", ".env.16h", ".env.*", "auth.json"} <= set(patterns)
+    assert ".env.example" not in patterns
     assert "## .env.16h" in (PUSHING_REFERENCES / reference).read_text()
+    commands = build_block(PUSHING_REFERENCES / reference)
+    if reference == "symfony.md":
+        # composer dump-env's .env.local.php replaces every .env read, the platform's included. .env.* matches
+        # it too; its own line keeps it out if .env.* is ever narrowed. Symfony has no .env.example to add back.
+        assert ".env.local.php" in patterns and ".env.example" not in commands
+    else:
+        # The platform's env writer reads <release>/.env.example as its third layer: .env.* keeps it out of the
+        # first zip, so the build adds it back afterwards.
+        assert commands.index('zip -r -q "$parts_folder/code.zip" . -x@.deployignore') < commands.index(ADD_EXAMPLE_BACK)
 
 
-def test_symfony_keeps_env_prod_and_the_compiled_env_out_of_the_zip():
-    # Symfony loads .env.prod after .env, so in the release it would override the platform's block;
-    # composer dump-env's .env.local.php replaces every .env read, the platform's included.
-    patterns = deployignore_patterns(PUSHING_REFERENCES / "symfony.md")
-    assert ".env.prod" in patterns and ".env.local.php" in patterns
+@pytest.mark.parametrize("reference", ("laravel.md", "statamic.md"))
+def test_laravel_and_statamic_keep_the_vite_hot_file_and_the_storage_link_out(reference):
+    # public/hot points every asset at the local Vite dev server; zip follows the public/storage symlink into a
+    # real folder that storage:link --force cannot replace.
+    patterns = deployignore_patterns(PUSHING_REFERENCES / reference)
+    assert "public/hot" in patterns and "public/storage/*" in patterns
+
+
+@pytest.mark.parametrize("reference", ("laravel.md", "statamic.md"))
+def test_env_16h_is_made_only_from_an_env_example_without_the_platforms_keys(reference):
+    # Without the guard an empty .env.16h is created before grep fails; the platform suppresses the URL keys,
+    # so each push would name them.
+    text = (PUSHING_REFERENCES / reference).read_text()
+    env_16h_section = markdown_section(text, "## .env.16h")
+    assert '[ -f .env.example ] && [ ! -f .env.16h ] && grep -Ev' in env_16h_section
+    platform_keys = env_16h_section.split("platform_keys='", 1)[1].split("'", 1)[0].split("|")
+    assert {"MAIL_URL", "DB_URL", "DATABASE_URL"} <= set(platform_keys)
 
 
 def test_laravel_no_longer_claims_the_platform_writes_env_from_secrets():
@@ -153,7 +194,9 @@ def test_laravel_no_longer_claims_the_platform_writes_env_from_secrets():
 
 
 def test_symfony_ships_its_committed_env_inside_the_env_part():
-    assert 'cat .env .env.16h > "$parts_folder/env.16h"' in (PUSHING_REFERENCES / "symfony.md").read_text()
+    # The echo guards a .env with no final newline; the blank line it adds otherwise is harmless.
+    env_part_line = '{ cat .env; echo; if [ -f .env.16h ]; then cat .env.16h; fi; } > "$parts_folder/env.16h"'
+    assert env_part_line in build_block(PUSHING_REFERENCES / "symfony.md")
 
 
 def test_files_zips_the_chosen_folders_contents_and_asks_no_php():
@@ -174,12 +217,12 @@ def test_releasing_says_production_is_wordpress_only():
 
 
 PINNED_DEPLOYIGNORE = {
-    "laravel.md": ["node_modules/*", "storage/logs/*.log", "bootstrap/cache/*.php", ".env", ".env.16h", ".env.local",
-                   ".env.*.local", ".git/*", "docs/16h/*", "*.sql", "*.sql.gz", "*.zip"],
-    "statamic.md": ["node_modules/*", "storage/logs/*.log", "bootstrap/cache/*.php", ".env", ".env.16h", ".env.local",
-                    ".env.*.local", ".git/*", "docs/16h/*", "*.sql", "*.sql.gz", "*.zip"],
-    "symfony.md": ["node_modules/*", "var/cache/*", "var/log/*", ".env", ".env.16h", ".env.local", ".env.*.local",
-                   ".env.prod", ".env.local.php", ".git/*", "docs/16h/*", "*.sql", "*.sql.gz", "*.zip"],
+    "laravel.md": ["node_modules/*", "storage/logs/*.log", "bootstrap/cache/*.php", "public/hot", "public/storage/*",
+                   ".env", ".env.16h", ".env.*", "auth.json", ".git/*", "docs/16h/*", "*.sql", "*.sql.gz", "*.zip"],
+    "statamic.md": ["node_modules/*", "storage/logs/*.log", "bootstrap/cache/*.php", "public/hot", "public/storage/*",
+                    ".env", ".env.16h", ".env.*", "auth.json", ".git/*", "docs/16h/*", "*.sql", "*.sql.gz", "*.zip"],
+    "symfony.md": ["node_modules/*", "var/cache/*", "var/log/*", ".env", ".env.16h", ".env.*", ".env.local.php",
+                   "auth.json", ".git/*", "docs/16h/*", "*.sql", "*.sql.gz", "*.zip"],
     "phpapp.md": ["node_modules/*", ".env", ".env.16h", ".git/*", "docs/16h/*", "*.sql", "*.sql.gz", "*.zip"],
     "files.md": [".git/*", "docs/16h/*", "*.sql", "*.sql.gz", "*.zip"],
 }
@@ -195,16 +238,37 @@ def passages_naming(text, word):
     return [passage for passage in re.split(r"\n\s*\n|\n- ", text) if word in passage]
 
 
-def test_docroot_guess_is_left_out_of_local_facts_never_sent_as_null():
-    # site_plan's schema is {"type": "string", "enum": [".", "public", "web"]}: a client that validates
-    # arguments against it refuses a null, so the key is left out when the project block has none.
+MEASURE_RULE = "Leave out any key you could not measure, never a guess; `git.present` is always sent, `true` or `false`."
+
+
+def with_single_spaces(text):
+    return " ".join(text.split())
+
+
+def test_local_facts_leave_out_what_was_not_measured_and_never_send_null():
+    # Ruling P-R9: git.remote_url, git.branch and git.shape are non-nullable strings in site_plan's schema, and
+    # docroot_guess is {"type": "string", "enum": [".", "public", "web"]}: a client that validates arguments
+    # refuses a null, so an unmeasured key is left out. git.present is always sent.
     body = (SKILLS / "pushing-to-staging" / "SKILL.md").read_text()
     step_3 = body.split("## Step 3", 1)[1].split("## Step 4", 1)[0]
     docroot_clause = step_3.split("`docroot_guess`", 1)[1].split(")", 1)[0]
     assert "null" not in docroot_clause and "leave it out" in docroot_clause
+    assert MEASURE_RULE in with_single_spaces(step_3) and "`null`" not in step_3
+    for reference in ("laravel.md", "statamic.md", "symfony.md", "phpapp.md", "files.md"):
+        local_facts = markdown_section((PUSHING_REFERENCES / reference).read_text(), "## Local facts")
+        assert MEASURE_RULE in with_single_spaces(local_facts), reference
+        assert "`null`" not in local_facts and "shape: null" not in local_facts, reference
     for reference in REFERENCES:
         for passage in passages_naming((PUSHING_REFERENCES / reference).read_text(), "docroot_guess"):
             assert "null" not in passage, (reference, passage)
+
+
+@pytest.mark.parametrize("reference", ("statamic.md", "symfony.md", "phpapp.md"))
+def test_each_reference_without_git_lines_says_where_the_git_facts_come_from(reference):
+    local_facts = markdown_section((PUSHING_REFERENCES / reference).read_text(), "## Local facts")
+    assert "from the project block" in local_facts and "three git lines in `laravel.md`" in with_single_spaces(local_facts)
+    laravel_local_facts = markdown_section((PUSHING_REFERENCES / "laravel.md").read_text(), "## Local facts")
+    assert len([line for line in laravel_local_facts.splitlines() if line.startswith("git_")]) == 3
 
 
 def test_files_build_block_names_its_folder_and_checks_index_html_before_zipping():

@@ -14,7 +14,7 @@ The directory holding **`artisan`** — not `public/`, which is only the docroot
 | DDEV | the project root; `docroot: public` in `.ddev/config.yaml` |
 
 Unlike WordPress, the repo **is** the app here. That is why the git question
-defaults to yes. A tree that also holds `please` and requires `statamic/cms`
+defaults to yes. A tree that also holds `please` or requires `statamic/cms`
 is Statamic: read `statamic.md` instead.
 
 ## Git
@@ -39,17 +39,22 @@ folder_name="$(basename "$PWD")"
 siteurl="$(php artisan tinker --execute='echo config("app.url");' 2>/dev/null)"
 php_version="$(php -r 'echo PHP_MAJOR_VERSION.".".PHP_MINOR_VERSION;')"
 code_size_bytes=$(( $(du -sk . | cut -f1) * 1024 ))
+git_present="$(git rev-parse --is-inside-work-tree 2>/dev/null || echo false)"
 git_remote_url="$(git remote get-url origin 2>/dev/null)"
 git_branch="$(git rev-parse --abbrev-ref HEAD 2>/dev/null)"
 ```
 
 - `siteurl` is `APP_URL`. If tinker is unavailable, read `APP_URL` from `.env`
   — **read it, never upload it**.
-- `uploads_size_bytes` has no Laravel meaning: pass `null`. Public user media
+- `uploads_size_bytes` has no Laravel meaning: leave it out. Public user media
   under `storage/app/public` travels once, inside `storage/` on the first
   push; after that the platform keeps its own copy. Say so if the app has any.
-- `db_size_bytes`: `null`. The plan asks nothing about the database here.
+- `db_size_bytes`: leave it out. The plan asks nothing about the database here.
 - `docroot_guess`: `public`, from the project block.
+- `git`: `present`, `remote_url` and `branch` from the three git lines above;
+  `shape` from the project block's `Shape:`.
+- Leave out any key you could not measure, never a guess; `git.present` is
+  always sent, `true` or `false`.
 
 ## .env.16h
 
@@ -61,8 +66,8 @@ the platform writes (and ignores in the part, naming each in the push report),
 and keep it out of git:
 
 ```bash
-platform_keys='APP_NAME|APP_ENV|APP_KEY|APP_DEBUG|APP_URL|LOG_CHANNEL|LOG_LEVEL|DB_CONNECTION|DB_HOST|DB_PORT|DB_DATABASE|DB_USERNAME|DB_PASSWORD|SESSION_DRIVER|CACHE_STORE|QUEUE_CONNECTION|FILESYSTEM_DISK|BROADCAST_CONNECTION|MAIL_MAILER|MAIL_HOST|MAIL_PORT|MAIL_USERNAME|MAIL_PASSWORD|MAIL_ENCRYPTION|MAIL_FROM_ADDRESS|MAIL_FROM_NAME'
-test -f .env.16h || grep -Ev "^(export[[:space:]]+)?(${platform_keys})=" .env.example > .env.16h
+platform_keys='APP_NAME|APP_ENV|APP_KEY|APP_DEBUG|APP_URL|LOG_CHANNEL|LOG_LEVEL|DB_CONNECTION|DB_HOST|DB_PORT|DB_DATABASE|DB_USERNAME|DB_PASSWORD|SESSION_DRIVER|CACHE_STORE|QUEUE_CONNECTION|FILESYSTEM_DISK|BROADCAST_CONNECTION|MAIL_MAILER|MAIL_HOST|MAIL_PORT|MAIL_USERNAME|MAIL_PASSWORD|MAIL_ENCRYPTION|MAIL_FROM_ADDRESS|MAIL_FROM_NAME|MAIL_URL|DB_URL|DATABASE_URL'
+[ -f .env.example ] && [ ! -f .env.16h ] && grep -Ev "^(export[[:space:]]+)?(${platform_keys})=" .env.example > .env.16h
 grep -qxF '.env.16h' .gitignore 2>/dev/null || printf '\n.env.16h\n' >> .gitignore
 ```
 
@@ -76,10 +81,12 @@ push: the platform rewrites `.env` each time, so a push without it drops its key
 node_modules/*
 storage/logs/*.log
 bootstrap/cache/*.php
+public/hot
+public/storage/*
 .env
 .env.16h
-.env.local
-.env.*.local
+.env.*
+auth.json
 .git/*
 docs/16h/*
 *.sql
@@ -92,9 +99,12 @@ docs/16h/*
 | `node_modules/*` | build input only |
 | `storage/logs/*.log` | local logs: weight, and whatever the app wrote to them. The folder itself travels |
 | `bootstrap/cache/*.php` | a `config:cache` file is the local `.env` frozen into PHP, and it would win over the platform's. Laravel rebuilds the manifests; the folder itself travels |
+| `public/hot` | laravel-vite-plugin writes it while `npm run dev` runs and `npm run build` does not remove it; in the release, `Vite::isRunningHot()` points every asset at `localhost:5173` and the devsite has no CSS or JS |
+| `public/storage/*` | the `storage:link` symlink: zip follows it and packs a real folder, which the platform's `storage:link --force` cannot replace, so the devsite serves the old local copies and new uploads 404 |
 | `.env` | never travels in the zip. The platform writes `.env` on every push from the site row, the app key it keeps for the site, the database it made, and the mail catcher; keys only this app knows go in `.env.16h` (above) |
 | `.env.16h` | travels as the `env` part, never inside the release |
-| `.env.local`, `.env.*.local` | one machine's values. `.env.example` is not on the list: it travels, and the platform reads it to show the developer which keys are still blank |
+| `.env.*` | every other env file in the tree: `.env.production`, `.env.backup` and `.env.staging` hold real secrets (Laravel's own `.gitignore` lists them for that), and `.env.local` is one machine's values. `.env.example` matches too: it travels by the add-back line in *Building the parts*, since the platform reads it to show which keys are still blank |
+| `auth.json` | composer's tokens for private packages |
 | `.git/*` | history is not a deploy artifact, and `.git/config` can hold a token |
 | `docs/16h/*` | the release notes and investigations are the developer's records, not the app's |
 | `*.sql`, `*.sql.gz`, `*.zip` | a dump or an archive left in the tree must never ship with the code |
@@ -124,6 +134,7 @@ a part left in the app root rides in the next `code.zip`.
 npm run build                                # if the app has a front-end build
 parts_folder="$(mktemp -d)"; echo "$parts_folder"
 zip -r -q "$parts_folder/code.zip" . -x@.deployignore
+[ -f .env.example ] && zip -q "$parts_folder/code.zip" .env.example
 if [ -f .env.16h ]; then cp .env.16h "$parts_folder/env.16h"; fi
 ```
 

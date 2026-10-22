@@ -24,10 +24,14 @@ php_version="$(php -r 'echo PHP_MAJOR_VERSION.".".PHP_MINOR_VERSION;')"
 code_size_bytes=$(( $(du -sk . | cut -f1) * 1024 ))
 ```
 
-- `siteurl`: the URL you open locally (`symfony server:status` prints it), or
-  `null`. Nothing is rewritten.
-- `db_size_bytes` and `uploads_size_bytes`: `null`.
+- `siteurl`: the URL you open locally (`symfony server:status` prints it).
+  Nothing is rewritten.
+- `db_size_bytes` and `uploads_size_bytes`: leave them out.
 - `docroot_guess`: `public`, from the project block.
+- `git`: from the project block (`remote_url`, `branch`, `Shape:`); without
+  the block, run the three git lines in `laravel.md`'s *Local facts*.
+- Leave out any key you could not measure, never a guess; `git.present` is
+  always sent, `true` or `false`.
 
 ## .env.16h
 
@@ -63,10 +67,9 @@ var/cache/*
 var/log/*
 .env
 .env.16h
-.env.local
-.env.*.local
-.env.prod
+.env.*
 .env.local.php
+auth.json
 .git/*
 docs/16h/*
 *.sql
@@ -81,9 +84,9 @@ docs/16h/*
 | `var/log/*` | local logs; the folder itself travels |
 | `.env` | rides in the env part, never the zip: a release holding a `.env` is refused |
 | `.env.16h` | rides in the env part, never inside the release |
-| `.env.local`, `.env.*.local` | one machine's values |
-| `.env.prod` | Symfony loads it after `.env`, so in the release it would override the platform's keys; it never ships. `.env.test` and its kind may travel: `APP_ENV=prod` never loads them |
-| `.env.local.php` | `composer dump-env`'s compiled file: Symfony reads it instead of every `.env`, the platform's included |
+| `.env.*` | every other env file: `.env.prod` (Symfony loads it after `.env`, so in the release it would override the platform's keys), `.env.local` and `.env.*.local` (one machine's values), and any `.env.production` or `.env.backup` copy holding real secrets. Symfony has no `.env.example`, so nothing is added back |
+| `.env.local.php` | `composer dump-env`'s compiled file: Symfony reads it instead of every `.env`, the platform's included. `.env.*` matches it too; its own line keeps it out if `.env.*` is ever narrowed |
+| `auth.json` | composer's tokens for private packages |
 | `.git/*` | history is not a deploy artifact, and `.git/config` can hold a token |
 | `docs/16h/*` | the developer's records, not the app's |
 | `*.sql`, `*.sql.gz`, `*.zip` | a dump or an archive left in the tree must never ship with the code |
@@ -103,17 +106,13 @@ it once every part has answered `204` (`rm -rf "$parts_folder"`):
 ```bash
 parts_folder="$(mktemp -d)"; echo "$parts_folder"
 zip -r -q "$parts_folder/code.zip" . -x@.deployignore
-[ -z "$(tail -c1 .env)" ] || echo "add a newline at the end of .env first"
-if [ -f .env.16h ]; then
-  cat .env .env.16h > "$parts_folder/env.16h"
-else
-  cp .env "$parts_folder/env.16h"
-fi
+{ cat .env; echo; if [ -f .env.16h ]; then cat .env.16h; fi; } > "$parts_folder/env.16h"
 ```
 
-`.env` must end with a newline, or `cat` runs its last line into the first of
-`.env.16h`. `parts` is always `["code", "env"]`. There is no `database` part: a
-database import is WordPress-only in this wave.
+The `echo` guards a `.env` with no final newline, whose last line would
+otherwise run into the first of `.env.16h`; the blank line it adds is harmless.
+`parts` is always `["code", "env"]`. There is no `database` part: a database
+import is WordPress-only in this wave.
 
 ## After `applied`
 

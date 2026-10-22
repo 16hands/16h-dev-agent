@@ -17,9 +17,12 @@ itself:
 | `web/` | `web` | the folder holding `web/` |
 | `htdocs/`, `www/`, any other name | not offered | move it, or rename the folder `public` (and every path in the code that names it), then push |
 
-The platform looks for `<docroot>/index.php` in the zip and refuses
-`refused: code.zip has no index.php — is this the phpapp root?` when it is not
-there — the usual cause is zipping from inside `public/`.
+The platform accepts a zip with an `index.php` at its root, under `public/` or
+under `web/`, whatever the docroot answer, and refuses `refused: code.zip has
+no index.php — is this the phpapp root?` when none is there. It cannot tell a
+zip made from the wrong folder, so the zip root must be the folder that
+**holds** the docroot you answered (for `.`, the docroot itself): a `public`
+site zipped from inside `public/` passes the check and serves nothing.
 
 With `.`, every file in the zip is served: `vendor/`, `composer.json`, any
 config file. When the app has code or settings that must not be downloadable,
@@ -43,10 +46,14 @@ php_version="$(php -r 'echo PHP_MAJOR_VERSION.".".PHP_MINOR_VERSION;')"
 code_size_bytes=$(( $(du -sk . | cut -f1) * 1024 ))
 ```
 
-- `siteurl`: the URL you open locally, or `null`. Nothing is rewritten.
-- `db_size_bytes` and `uploads_size_bytes`: `null`.
+- `siteurl`: the URL you open locally. Nothing is rewritten.
+- `db_size_bytes` and `uploads_size_bytes`: leave them out.
 - `docroot_guess`: copied from the project block (`.`, `public` or `web`);
   leave it out of `local_facts` when the block has no `docroot_guess` line.
+- `git`: from the project block (`remote_url`, `branch`, `Shape:`); without
+  the block, run the three git lines in `laravel.md`'s *Local facts*.
+- Leave out any key you could not measure, never a guess; `git.present` is
+  always sent, `true` or `false`.
 
 ## `.deployignore`
 

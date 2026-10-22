@@ -31,10 +31,12 @@ git_branch="$(git rev-parse --abbrev-ref HEAD 2>/dev/null)"
 
 - `folder_name` names the devsite, so it comes from the repo: a site named
   `dist.devsite.co.nz` names nothing.
-- `git`: `present`, `remote_url` and `branch` as measured, `shape: null` — the
-  build folder is not the repo, so there is nothing to pull.
-- Leave `docroot_guess` out of `local_facts`: the zip is the docroot.
-- Every other key is `null`.
+- `git`: `present`, `remote_url` and `branch` as measured; leave `shape` out —
+  the build folder is not the repo, so there is nothing to pull.
+- Leave `docroot_guess` out of `local_facts`: the zip is the docroot. Leave
+  out `siteurl`, `db_size_bytes` and `uploads_size_bytes` too: a static site has none.
+- Leave out any key you could not measure, never a guess; `git.present` is
+  always sent, `true` or `false`.
 - `site_plan(app: "files", local_facts)`.
 
 ## `.deployignore`
