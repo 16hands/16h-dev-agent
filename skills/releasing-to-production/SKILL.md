@@ -8,16 +8,20 @@ description: Use when the developer says the change should go live — "deploy t
 A production push replaces what the client's customers are using. The gate: **no production push until the developer has heard every line of `what_will_change` and said yes to it.**
 
 ```
-toggle → site_plan(type=production) → read what_will_change → questions → their yes → build → upload → site_push(confirm, digest) → verifying-a-deploy → release note
+site_status(production) → site_plan(type=production) → read what_will_change → include_database → their yes → upload → site_push(confirm, digest) → verifying-a-deploy → release note
 ```
 
-## 1. The site and its toggle
+## 1. The site, before the push
 
-The site is the `production` that `site_status` named, or the one the developer names; say which. Its `agent_production_pushes: false` means agent pushes to it are off: say so — the site's owner turns them on in the panel — and stop without planning.
+The site is the `production` that `site_status` named, or the one the developer names; say which. Call `site_status(site_key=<that site>)`, without `repo`: the toggle is the answering site's own field, and the last answer you hold may be the devsite's. Read three things from it:
+
+- `agent_production_pushes` — `false` means agent pushes to it are off: say so — the site's owner turns them on in the panel — and stop without planning.
+- `errors_last_hour` — the count before the push, which the release note sets the after-push count against.
+- `http` — how it answers now; a production site never pushed to answers `502`.
 
 ## 2. Plan
 
-`site_plan(client?, type: "production", site_key, app, local_facts)`, with `local_facts` collected as `pushing-to-staging` step 3 does. It returns `plan_id`, `what_will_change`, `questions`, `defaults`, `refusals` and `digest`. A plan lives 30 minutes.
+`site_plan(client?, type: "production", site_key, app, local_facts)`, with `local_facts` collected as `pushing-to-staging` step 3 does. It returns `plan_id`, `what_will_change`, `questions`, `defaults`, `refusals`, `digest` and `uploads`: presigned POSTs for `code` on Laravel, and for `code`, `database` and `uploads` on WordPress. A plan lives 30 minutes.
 
 A refusal here names the gate, and the push stops until someone else moves it:
 
@@ -38,9 +42,11 @@ Then the plan's questions, in order:
 - **`include_database`** (WordPress only), default **no**. Read its text, and say what yes means on a live site: every order, customer and form entry made since your local copy was taken is replaced by that copy; the current database is kept as a restore point. A yes adds `database` to `parts` and makes `database_replaced` true — say both back.
 - **`confirm`**, default no. Only the developer's own yes to what you just read answers it.
 
-## 4. Build, upload, push
+**`uploads`** (WordPress) goes in `parts` only when the developer says so — the plan asks no question about it: a first push to a production site never pushed to needs it, and the lane adds to the shared uploads folder without deleting anything.
 
-Build the parts answered yes and upload them to the plan's `uploads`, as `pushing-to-staging` steps 5 and 6 do. A plan with no `uploads` cannot carry a part yet, and `site_push` refuses it (`part code is not in plan`): say that this is a gap to report to 16Hands, and stop.
+## 4. Upload, push
+
+Build the parts and upload each to its POST in the plan's `uploads`, as `pushing-to-staging` steps 5 and 6 do. A part named in `parts` that never reached its POST is refused: `part X has not been uploaded — POST it to the URL from site_plan first`.
 
 `site_push(site_key, plan_id, parts, confirm: true, digest, include_database)`, with `digest` exactly as the plan returned it, and `include_database` only when the plan asked it — on a Laravel plan it is refused as a question the plan never asked. It returns a `task_id`; then `verifying-a-deploy`, five-minute look included.
 
@@ -52,4 +58,4 @@ Refused at push time:
 
 ## 5. The release note
 
-After `applied`, write `docs/16h/releases/<YYYY-MM-DD>-<site_key>.md` from `references/release-note.md` and tell the developer its path. It records the digest, the `what_will_change` the developer heard and `verifying-a-deploy`'s `http` and `errors_last_hour` answers; never a credential or a pasted secret. A push that ends `failed` leaves the previous release serving and writes no note: read its `message` out.
+After `applied`, write `docs/16h/releases/<YYYY-MM-DD>-<site_key>.md` from `references/release-note.md` and tell the developer its path. It records the digest, the `what_will_change` the developer heard, and `verifying-a-deploy`'s `http` and `errors_last_hour` answers against step 1's. A push that ends `failed` leaves the previous release serving and writes no note: read its `message` out.

@@ -1,6 +1,6 @@
 # Release note — template
 
-Copy everything below the line into `docs/16h/releases/<YYYY-MM-DD>-<site_key>.md`, fill every `<…>` from the plan, the push and `verifying-a-deploy`, and delete what does not apply. Never a credential, a token or a pasted secret.
+Copy everything below the line into `docs/16h/releases/<YYYY-MM-DD>-<site_key>.md`, fill every `<…>` from the `site_status` read before the push, the plan, the push and `verifying-a-deploy`, and delete what does not apply.
 
 ---
 
@@ -30,6 +30,6 @@ The `what_will_change` the developer heard before saying yes:
 From `site_status(<site_key>)` after `applied`, and again five minutes later:
 
 - `http`: <status> at <final_url> in <milliseconds> ms<; blocked_at_waf: true — the WAF answered, not the site | ; error: <error>>
-- `errors_last_hour`: <count, "at least <count>" when at_cap>, against <count> before the push<; new: the top summaries>
+- `errors_last_hour`: <count, "at least <count>" when at_cap>, against <count> in the `site_status` read before the push<; new: the top summaries>
 
 **Restore point: kept**

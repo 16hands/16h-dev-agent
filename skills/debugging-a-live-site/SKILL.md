@@ -36,4 +36,4 @@ The error, the code path, and why the client's action reaches it.
 The fix and where it was pushed, or what was ruled out and how.
 ```
 
-Cut credentials out of the evidence before it goes in: a stack trace can carry a DSN with the database password in it. A glance at the logs that names nothing writes nothing.
+A glance at the logs that names nothing writes nothing.

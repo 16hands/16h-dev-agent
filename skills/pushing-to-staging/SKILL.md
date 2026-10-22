@@ -67,7 +67,7 @@ code_size_bytes=$(( $(du -sk . | cut -f1) * 1024 ))
 
 Keys, exactly: `folder_name`, `siteurl`, `php`, `db_size_bytes`, `uploads_size_bytes`, `code_size_bytes`, `git` = {`present`, `remote_url`, `branch`, `shape`}; what you could not measure goes as `null`, never a guess. Then `site_plan(client?, app, local_facts)`, `app` = `wordpress`|`laravel`.
 
-The name comes from `folder_name`. A taken one is refused with two others — `name X.devsite.co.nz is taken — try X2.devsite.co.nz or X-<client>.devsite.co.nz`: offer them, the first as the default, ask once, and plan again with `folder_name` set to the label they chose (`X2`). `site_key` on `site_plan` means a site that already exists, so it cannot pick a new name.
+The name comes from `folder_name`. A taken one is refused with two others — `name X.devsite.co.nz is taken — try X2.devsite.co.nz or X-<client>.devsite.co.nz`. If the taken name is one of `site_status`'s `devsites`, or the project itself with `type: dev`, it is the developer's own site: take the *later* path with that `site_key`, never a second devsite. Only otherwise offer the two names, the first as the default, ask once, and plan again with `folder_name` set to the label they chose (`X2`). `site_key` on `site_plan` means a site that already exists, so it cannot pick a new name.
 
 ## Step 4 — ask the plan's questions, then create
 

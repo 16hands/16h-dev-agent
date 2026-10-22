@@ -9,7 +9,7 @@ description: Use when the question is about requests, bots, mail or cron — "wh
 
 ## Which kind answers which question
 
-- **`access` — "who's hitting the site", "what happened at 2pm", "it's slow", "it's 502ing".** The lake's nginx rows, newest first: `timestamp`, `site`, `host`, `method`, `uri`, `status`, `request_time` (seconds), `client_ip`, `server_node`. Pass `site` to narrow to one site. They are rows, not totals: at most `limit` of them (50 unless you ask, 200 at most), so a wide window shows only its newest rows. Narrow `minutes` to the moment in question, and count what comes back before calling it a pattern.
+- **`access` — "who's hitting the site", "what happened at 2pm", "it's slow", "it's 502ing".** The lake's nginx rows, newest first: `timestamp`, `site`, `host`, `method`, `uri`, `status`, `request_time` (seconds), `client_ip`, `server_node`. Pass `site` to narrow to one site. They are rows, not totals: at most `limit` of them (50 unless you ask, 200 at most), newest first, and the window always ends now. A past moment ("at 2pm") is reachable only while fewer than `limit` rows lie between it and now: pass `site` and `limit: 200`, check that the oldest row's `timestamp` reaches the moment, and if it does not, say the tool cannot reach that far back on this site. Count what comes back before calling it a pattern.
 - **`mail` — "are our emails going out", "they're bouncing".** The delivery outcome of the client's email, newest first: `event`, `from_domain`, `to_domain`, `smtp_status`, `diagnostic`. Addresses are hashed; the domain, the status and the diagnostic are what a bounce is chased with. It is the whole client's mail, not one site's.
 - **`cron` — "did the cron run".** The client's last runs, newest first, whatever `minutes` says: `label`, `schedule`, `status`, `started_at`, `exit_code`, `elapsed_seconds`, `output_tail`. An `exit_code` of `null` is a job still running or one that was killed, and neither is a success.
 - **`errors`** is the application's own voice. A fault to name is `debugging-a-live-site`.
@@ -22,4 +22,4 @@ Never answer it with a bare `curl` from this machine: the WAF blocks that reques
 
 ## Windows
 
-`minutes` counts back from now, 1440 at most, with slack on both sides, as `debugging-a-live-site`'s triage says: "just now" is 30, "at 2pm" is from an hour before 2pm to now, "this morning" is 480, "since yesterday" is 1440. A window too narrow returns nothing and reads as "nothing happened".
+`minutes` sets where the window starts, counted back from now and 1440 at most; it always ends now. Start it with slack before the moment, as `debugging-a-live-site`'s triage does: "just now" is 30, "at 2pm" is from an hour before 2pm, "this morning" is 480, "since yesterday" is 1440. A window that starts too late returns nothing and reads as "nothing happened"; for `access`, check the oldest row as above.

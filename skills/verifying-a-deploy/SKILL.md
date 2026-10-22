@@ -13,7 +13,7 @@ A push is done when `site_status` says `applied` and the site answers, not when 
 
 | `state` | Means | Do |
 |---|---|---|
-| `planned` | plan made, not confirmed | call `site_create`; a production plan or a later change goes straight to `site_push` |
+| `planned` | plan made, not confirmed | not pushed yet — back to `pushing-to-staging`, or `releasing-to-production` for production |
 | `requested` | the site is being created | wait |
 | `accepted` | site and database exist | upload, then `site_push` |
 | `refused` | creation was refused | read `message`; re-plan or stop |
