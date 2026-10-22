@@ -2,10 +2,13 @@ import importlib.util
 import json
 import os
 import shutil
+import signal
 import subprocess
 import sys
 import time
 from pathlib import Path
+
+import pytest
 
 RECON = Path(__file__).resolve().parents[1] / "hooks" / "recon.py"
 HOOK = Path(__file__).resolve().parents[1] / "hooks" / "session-start"
@@ -380,6 +383,50 @@ def test_recon_is_fast(tmp_path):
     assert time.monotonic() - started < 1.0
 
 
+needs_mkfifo = pytest.mark.skipif(not hasattr(os, "mkfifo"), reason="no named pipes on this platform")
+
+
+@needs_mkfifo
+def test_named_pipes_where_recon_reads_never_block_it(tmp_path):
+    # 1Password Environments mounts .env as a named pipe; opening one for reading waits for a writer.
+    site_folder = tmp_path / "site"
+    make_wordpress(site_folder, wp_config_defines={"WP_HOME": "https://from-wp-config.test"})
+    os.mkfifo(site_folder / ".env")
+    os.mkfifo(site_folder / "composer.json")
+    facts = recon(site_folder)
+    assert facts["is_site"] is True
+    assert facts["repo"]["hostnames"] == ["from-wp-config.test"]
+    pipes_only_folder = tmp_path / "pipes-only"
+    pipes_only_folder.mkdir()
+    os.mkfifo(pipes_only_folder / "style.css")
+    os.mkfifo(pipes_only_folder / "composer.json")
+    assert recon(pipes_only_folder) == {"is_site": False}
+
+
+def test_a_file_over_the_read_cap_is_not_read(tmp_path):
+    recon_module = load_recon_module()
+    oversized_file = tmp_path / ".env"
+    oversized_file.write_text("APP_URL=http://too-big.test\n" + "#" * recon_module.FILE_READ_CAP_BYTES)
+    assert recon_module.read_text_or_empty(oversized_file) == ""
+    small_file = tmp_path / "small.env"
+    small_file.write_text("APP_URL=http://small.test\n")
+    assert recon_module.read_text_or_empty(small_file) == "APP_URL=http://small.test\n"
+
+
+@pytest.mark.skipif(not hasattr(signal, "SIGALRM"), reason="no SIGALRM on this platform")
+def test_recon_gives_up_silently_at_its_deadline(tmp_path):
+    make_wordpress(tmp_path / "site")
+    slow_bin_folder = tmp_path / "slow-bin"
+    slow_bin_folder.mkdir()
+    slow_git = slow_bin_folder / "git"
+    slow_git.write_text("#!/bin/sh\nexec sleep 5\n")
+    slow_git.chmod(0o755)
+    environment = {**os.environ, "PATH": f"{slow_bin_folder}{os.pathsep}{os.environ['PATH']}"}
+    started = time.monotonic()
+    assert recon(tmp_path / "site", environment=environment) is None
+    assert time.monotonic() - started < 1.9
+
+
 PLATFORM_VARIABLES = ("CLAUDE_PLUGIN_ROOT", "CURSOR_PLUGIN_ROOT", "COPILOT_CLI", "MUSE_PLUGIN_ROOT")
 
 
@@ -491,6 +538,38 @@ def test_malformed_stdin_falls_back_to_the_folder_the_hook_runs_in(tmp_path):
         context = json.loads(completed.stdout)["hookSpecificOutput"]["additionalContext"]
         assert "name: using-16h" in context
         assert f'"folder_name": "{tmp_path.name}"' in context
+
+
+@needs_mkfifo
+def test_a_named_pipe_dot_env_does_not_hold_up_the_session(tmp_path):
+    make_wordpress(tmp_path)
+    os.mkfifo(tmp_path / ".env")
+    assert "## This project" in injected_context(tmp_path)
+
+
+def test_stdin_left_open_does_not_hold_up_the_session(tmp_path):
+    make_wordpress(tmp_path)
+    read_end, write_end = os.pipe()
+    try:
+        os.write(write_end, json.dumps({"cwd": str(tmp_path)}).encode())
+        started = time.monotonic()
+        completed = subprocess.run(["bash", str(HOOK)], stdin=read_end, capture_output=True, encoding="utf-8",
+                                   env=hook_environment(), cwd=tmp_path, timeout=10)
+        elapsed_seconds = time.monotonic() - started
+    finally:
+        os.close(read_end)
+        os.close(write_end)
+    assert completed.returncode == 0 and completed.stderr == "", completed.stderr
+    assert elapsed_seconds < 4
+    assert "## This project" in json.loads(completed.stdout)["hookSpecificOutput"]["additionalContext"]
+
+
+def test_a_closed_stdin_writes_nothing_to_stderr(tmp_path):
+    make_wordpress(tmp_path)
+    completed = subprocess.run(["bash", "-c", 'exec bash "$0" <&-', str(HOOK)], capture_output=True,
+                               encoding="utf-8", env=hook_environment(), cwd=tmp_path, timeout=5)
+    assert completed.returncode == 0 and completed.stderr == "", completed.stderr
+    assert "## This project" in json.loads(completed.stdout)["hookSpecificOutput"]["additionalContext"]
 
 
 def test_a_json_py_planted_in_the_project_is_never_run_by_a_session_start(tmp_path):

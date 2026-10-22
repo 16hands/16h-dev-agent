@@ -33,10 +33,14 @@ fi
 
 # The harness hands the hook one JSON object on stdin: {"cwd": ..., "source": ...}.
 # Read it once, with the read builtin (no cat). A terminal means someone ran
-# the hook by hand, so there is nothing to wait for.
+# the hook by hand, so there is nothing to wait for. The harness closes stdin
+# after the JSON, and read returns 1 at end of input with the text already in
+# hook_input; -t 2 only guards a stdin left open (bash 3.2 then drops what it
+# read, and the hook falls back to the folder it runs in). 2>/dev/null keeps a
+# closed fd 0 quiet.
 hook_input=""
 if [ ! -t 0 ]; then
-  IFS= read -r -d '' hook_input  # returns 1 at end of input; the text is already in hook_input
+  IFS= read -r -t 2 -d '' hook_input 2>/dev/null
 fi
 
 # Python reads the JSON, asks recon.py about the folder, and lays out the
@@ -91,16 +95,16 @@ if command -v python3 >/dev/null 2>&1; then
 fi
 
 # Escape string for JSON embedding using bash parameter substitution.
-# Each ${s//old/new} is a single C-level pass - orders of magnitude
+# Each ${text//old/new} is a single C-level pass - orders of magnitude
 # faster than the character-by-character loop this replaces.
 escape_for_json() {
-    local s="$1"
-    s="${s//\\/\\\\}"
-    s="${s//\"/\\\"}"
-    s="${s//$'\n'/\\n}"
-    s="${s//$'\r'/\\r}"
-    s="${s//$'\t'/\\t}"
-    printf '%s' "$s"
+    local text="$1"
+    text="${text//\\/\\\\}"
+    text="${text//\"/\\\"}"
+    text="${text//$'\n'/\\n}"
+    text="${text//$'\r'/\\r}"
+    text="${text//$'\t'/\\t}"
+    printf '%s' "$text"
 }
 
 using_16h_escaped=$(escape_for_json "$using_16h_content")

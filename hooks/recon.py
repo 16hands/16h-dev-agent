@@ -4,17 +4,23 @@
 Local and read-only: no network, no prompt, no file written, and the only
 values read out of .env and wp-config.php are the host parts of four URL keys.
 Prints {"is_site": false} when the folder holds no site, prints nothing when
-anything fails, and always exits 0 so a hook calling it can never block a session.
+anything fails or the deadline passes, and always exits 0 so a hook calling it
+can never block a session.
 """
 from __future__ import annotations
 
 import json
 import re
+import signal
+import stat
 import subprocess
 import sys
 from pathlib import Path
 
+RECON_DEADLINE_SECONDS = 1
 SUBPROCESS_TIMEOUT_SECONDS = 2
+FILE_READ_CAP_BYTES = 256 * 1024
+THEME_HEADER_CHARACTER_COUNT = 8 * 1024
 THEME_HEADER_LINE_COUNT = 20
 HOSTNAME_KEYS = ("APP_URL", "WP_HOME", "WP_SITEURL", "DOMAIN_CURRENT_SITE")
 FOLDERS_NOT_WORTH_WALKING = ("node_modules", "vendor")
@@ -52,9 +58,22 @@ def run_quietly(command: list[str], working_directory: Path) -> str | None:
     return completed.stdout
 
 
-def read_text_or_empty(file_path: Path) -> str:
+def is_regular_file(file_path: Path) -> bool:
+    """Only a regular file is ever opened: opening a named pipe waits for a writer (1Password mounts .env as one)."""
     try:
-        return file_path.read_text(encoding="utf-8", errors="replace")
+        return stat.S_ISREG(file_path.stat().st_mode)
+    except OSError:
+        return False
+
+
+def read_text_or_empty(file_path: Path) -> str:
+    """A regular file's text, or "" for anything else and for a file over the read cap."""
+    try:
+        file_status = file_path.stat()
+        if not stat.S_ISREG(file_status.st_mode) or file_status.st_size > FILE_READ_CAP_BYTES:
+            return ""
+        with file_path.open(encoding="utf-8", errors="replace") as text_file:
+            return text_file.read(FILE_READ_CAP_BYTES)
     except OSError:
         return ""
 
@@ -80,16 +99,16 @@ def has_bedrock_web_app_folder(folder: Path) -> bool:
 
 
 def is_wordpress_theme(folder: Path) -> bool:
+    """A `Theme Name:` in style.css's first 20 lines, read from its first 8 KiB as WordPress reads theme headers."""
+    stylesheet_path = folder / "style.css"
+    if not is_regular_file(stylesheet_path):
+        return False
     try:
-        with (folder / "style.css").open(encoding="utf-8", errors="replace") as stylesheet:
-            for line_number, line in enumerate(stylesheet):
-                if line_number >= THEME_HEADER_LINE_COUNT:
-                    return False
-                if "Theme Name:" in line:
-                    return True
+        with stylesheet_path.open(encoding="utf-8", errors="replace") as stylesheet:
+            header_text = stylesheet.read(THEME_HEADER_CHARACTER_COUNT)
     except OSError:
         return False
-    return False
+    return any("Theme Name:" in line for line in header_text.splitlines()[:THEME_HEADER_LINE_COUNT])
 
 
 def has_wp_content_folders(folder: Path) -> bool:
@@ -308,10 +327,28 @@ def collect_facts(cwd: Path) -> dict:
     }
 
 
+def give_up_silently(signal_number, interrupted_frame) -> None:
+    """Exit 0 with nothing printed. SystemExit, not os._exit, so a running git is killed on the way out."""
+    sys.exit(0)
+
+
+def arm_deadline() -> None:
+    if hasattr(signal, "SIGALRM"):
+        signal.signal(signal.SIGALRM, give_up_silently)
+        signal.alarm(RECON_DEADLINE_SECONDS)
+
+
+def disarm_deadline() -> None:
+    if hasattr(signal, "SIGALRM"):
+        signal.alarm(0)
+
+
 def main(argv: list[str]) -> int:
+    arm_deadline()
     try:
         cwd = Path(argv[1]) if len(argv) > 1 else Path.cwd()
         facts_json = json.dumps(collect_facts(cwd))
+        disarm_deadline()
         print(facts_json)
     except Exception:
         pass
