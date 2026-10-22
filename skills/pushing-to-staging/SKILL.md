@@ -103,12 +103,12 @@ The name comes from `folder_name`. A taken one is refused with two others — `n
 Write `.deployignore` in the site root if it is absent; if it is there, add each line below that it lacks and rewrite any `dir/` line as `dir/*` — on every app but WordPress and a static site, take a `vendor/`, `storage/`, `content/` or `users/` line out instead: those travel, as each reference says. Show it.
 
 - WordPress: `wp-content/uploads/*`, `wp-content/cache/*`, `wp-content/upgrade/*`, `node_modules/*`, `.git/*`, `.env`, `wp-config.php`, `docs/16h/*`, `*.sql`, `*.sql.gz`, `*.zip`
-- Laravel and Statamic: `node_modules/*`, `storage/logs/*.log`, `bootstrap/cache/*.php`, `.env`, `.env.16h`, `.env.*`, `.git/*`, `docs/16h/*`, `*.sql`, `*.sql.gz`, `*.zip` — `vendor/` and `storage/` travel (and Statamic's `content/` and `users/`), for the reasons in its reference
-- Symfony: `node_modules/*`, `var/cache/*`, `var/log/*`, `.env`, `.env.16h`, `.env.*`, `.git/*`, `docs/16h/*`, `*.sql`, `*.sql.gz`, `*.zip` — `vendor/` travels
+- Laravel and Statamic: `node_modules/*`, `storage/logs/*.log`, `bootstrap/cache/*.php`, `.env`, `.env.16h`, `.env.local`, `.env.*.local`, `.git/*`, `docs/16h/*`, `*.sql`, `*.sql.gz`, `*.zip` — `vendor/` and `storage/` travel (and Statamic's `content/` and `users/`), for the reasons in its reference
+- Symfony: `node_modules/*`, `var/cache/*`, `var/log/*`, `.env`, `.env.16h`, `.env.local`, `.env.*.local`, `.env.prod`, `.git/*`, `docs/16h/*`, `*.sql`, `*.sql.gz`, `*.zip` — `vendor/` travels
 - phpapp: `node_modules/*`, `.env`, `.env.16h`, `.git/*`, `docs/16h/*`, `*.sql`, `*.sql.gz`, `*.zip`
 - files: `.git/*`, `docs/16h/*`, `*.sql`, `*.sql.gz`, `*.zip` — the zip is the chosen folder's contents
 
-Write a folder as `dir/*`: zip matches each pattern against file paths, so `dir/` leaves out only the folder's own entry and every file in it still goes in. `wp-config.php` and every `.env` are excluded on purpose — the platform writes its own, and a framework app's own keys travel as the env part, built from `.env.16h` as its reference says. The site serves whatever `code.zip` carries, so `docs/16h/*`, dumps and archives stay out: a dump in the tree is a dump anyone can download.
+Write a folder as `dir/*`: zip matches each pattern against file paths, so `dir/` leaves out only the folder's own entry and every file in it still goes in. `wp-config.php`, `.env` and a machine's `.env.local` are excluded on purpose — the platform writes its own, and a framework app's own keys travel as the env part, built from `.env.16h` as its reference says. `.env.example` travels: the platform reads it to show which keys are still blank. The site serves whatever `code.zip` carries, so `docs/16h/*`, dumps and archives stay out: a dump in the tree is a dump anyone can download.
 
 Build only the parts answered yes (WordPress below; every other app as its reference's *Building the parts* says), in a fresh folder outside the site root — a part built in the site root rides in the next `code.zip`, and production serves it. Print the folder's path and use it in step 6, since the next command may run in a new shell:
 

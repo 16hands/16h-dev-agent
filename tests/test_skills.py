@@ -130,8 +130,15 @@ def test_laravel_ships_vendor_and_the_storage_skeleton():
 @pytest.mark.parametrize("reference", ("laravel.md", "statamic.md", "symfony.md"))
 def test_each_framework_reference_keeps_every_env_file_out_of_the_zip(reference):
     patterns = deployignore_patterns(PUSHING_REFERENCES / reference)
-    assert {".env", ".env.16h", ".env.*"} <= set(patterns)
+    assert {".env", ".env.16h", ".env.local", ".env.*.local"} <= set(patterns)
+    # The platform's env writer reads <release>/.env.example as its third layer, so it must travel.
+    assert ".env.*" not in patterns and ".env.example" not in patterns
     assert "## .env.16h" in (PUSHING_REFERENCES / reference).read_text()
+
+
+def test_symfony_keeps_env_prod_out_of_the_zip():
+    # Symfony loads .env.prod after .env, so in the release it would override the platform's block.
+    assert ".env.prod" in deployignore_patterns(PUSHING_REFERENCES / "symfony.md")
 
 
 def test_laravel_no_longer_claims_the_platform_writes_env_from_secrets():

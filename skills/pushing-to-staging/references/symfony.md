@@ -45,8 +45,8 @@ Create `.env.16h` when the devsite needs a value the committed `.env` lacks,
 and keep it out of git (`printf '\n.env.16h\n' >> .gitignore` if it is not
 listed). What belongs in it:
 
-- the keys a committed `.env.prod` sets — `.env.*` keeps that file out of the
-  zip, and with `APP_ENV=prod` it would have been loaded;
+- the keys a committed `.env.prod` sets that this site needs — the file
+  itself never ships;
 - the values this site needs from `.env.local`, one at a time, asked of the
   developer — never the file wholesale: it is one machine's;
 - `MESSENGER_TRANSPORT_DSN=sync://` when the app uses Messenger: nothing
@@ -63,7 +63,9 @@ var/cache/*
 var/log/*
 .env
 .env.16h
-.env.*
+.env.local
+.env.*.local
+.env.prod
 .git/*
 docs/16h/*
 *.sql
@@ -78,13 +80,15 @@ docs/16h/*
 | `var/log/*` | local logs; the folder itself travels |
 | `.env` | rides in the env part, never the zip: a release holding a `.env` is refused |
 | `.env.16h` | rides in the env part, never inside the release |
-| `.env.*` | `.env.local`, `.env.test`, and `.env.local.php` from `composer dump-env`, which would win over the platform's `.env` |
+| `.env.local`, `.env.*.local` | one machine's values |
+| `.env.prod` | Symfony loads it after `.env`, so in the release it would override the platform's keys; it never ships. `.env.test` and its kind may travel: `APP_ENV=prod` never loads them |
 | `.git/*` | history is not a deploy artifact, and `.git/config` can hold a token |
 | `docs/16h/*` | the developer's records, not the app's |
 | `*.sql`, `*.sql.gz`, `*.zip` | a dump or an archive left in the tree must never ship with the code |
 
 Write every folder as `dir/*`: `dir/` leaves out only the folder's own entry.
-**`vendor/` travels on purpose** — the lane runs no `composer install`; run it
+Delete a `.env.local.php` left by `composer dump-env` before zipping: Symfony
+reads it instead of every `.env` file. **`vendor/` travels on purpose** — the lane runs no `composer install`; run it
 first if `vendor/` is missing, and take out any `vendor/` line.
 
 ## Building the parts

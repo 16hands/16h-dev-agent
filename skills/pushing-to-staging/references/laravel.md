@@ -78,7 +78,8 @@ storage/logs/*.log
 bootstrap/cache/*.php
 .env
 .env.16h
-.env.*
+.env.local
+.env.*.local
 .git/*
 docs/16h/*
 *.sql
@@ -93,7 +94,7 @@ docs/16h/*
 | `bootstrap/cache/*.php` | a `config:cache` file is the local `.env` frozen into PHP, and it would win over the platform's. Laravel rebuilds the manifests; the folder itself travels |
 | `.env` | never travels in the zip. The platform writes `.env` on every push from the site row, the app key it keeps for the site, the database it made, and the mail catcher; keys only this app knows go in `.env.16h` (above) |
 | `.env.16h` | travels as the `env` part, never inside the release |
-| `.env.*` | `.env.local`, `.env.testing`: one machine's values. `.env.example` goes too; its keys reach the site through `.env.16h`, which starts as a copy of it |
+| `.env.local`, `.env.*.local` | one machine's values. `.env.example` is not on the list: it travels, and the platform reads it to show the developer which keys are still blank |
 | `.git/*` | history is not a deploy artifact, and `.git/config` can hold a token |
 | `docs/16h/*` | the release notes and investigations are the developer's records, not the app's |
 | `*.sql`, `*.sql.gz`, `*.zip` | a dump or an archive left in the tree must never ship with the code |
