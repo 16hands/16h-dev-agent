@@ -32,6 +32,9 @@ THEME_HEADER_CHARACTER_COUNT = 8 * 1024
 THEME_HEADER_LINE_COUNT = 20
 HOSTNAME_KEYS = ("APP_URL", "WP_HOME", "WP_SITEURL", "DOMAIN_CURRENT_SITE")
 FOLDERS_NOT_WORTH_WALKING = ("node_modules", "vendor")
+# Root first: a plain PHP app's docroot guess is the first of these holding an index.php.
+INDEX_PHP_DOCROOTS = (".", "public", "web")
+APPS_SERVED_FROM_PUBLIC = ("laravel", "statamic", "symfony")
 
 HOSTNAME_KEY_ALTERNATIVES = "|".join(HOSTNAME_KEYS)
 DOT_ENV_HOSTNAME_LINE = re.compile(rf"^\s*(?:{HOSTNAME_KEY_ALTERNATIVES})\s*=\s*(?P<raw_value>.*?)\s*$")
@@ -98,8 +101,61 @@ def list_child_folders(folder: Path) -> list[Path]:
     return child_folders
 
 
+def read_composer_requirements(folder: Path) -> set[str]:
+    """The package names under composer.json's require and require-dev; empty for a missing or unreadable file.
+
+    RecursionError too: a composer.json nested thousands deep must cost the hook nothing.
+    """
+    try:
+        composer_manifest = json.loads(read_text_or_empty(folder / "composer.json"))
+    except (ValueError, RecursionError):
+        return set()
+    required_package_names = set()
+    if isinstance(composer_manifest, dict):
+        for section_name in ("require", "require-dev"):
+            requirements_section = composer_manifest.get(section_name)
+            if isinstance(requirements_section, dict):
+                required_package_names.update(requirements_section)
+    return required_package_names
+
+
+def requires_package(folder: Path, package_name: str) -> bool:
+    return package_name in read_composer_requirements(folder)
+
+
 def requires_roots_wordpress(folder: Path) -> bool:
     return '"roots/wordpress"' in read_text_or_empty(folder / "composer.json")
+
+
+def has_artisan(folder: Path) -> bool:
+    return (folder / "artisan").is_file()
+
+
+def has_bin_console(folder: Path) -> bool:
+    return (folder / "bin" / "console").is_file()
+
+
+def has_index_php(folder: Path) -> bool:
+    """index.php at the folder itself, under public/ or under web/; index.html is never a marker."""
+    return any((folder / docroot / "index.php").is_file() for docroot in INDEX_PHP_DOCROOTS)
+
+
+def is_symfony(folder: Path) -> bool:
+    return has_bin_console(folder) and (
+        requires_package(folder, "symfony/framework-bundle") or (folder / "symfony.lock").is_file()
+    )
+
+
+def is_drupal(folder: Path) -> bool:
+    return (
+        (folder / "core" / "lib" / "Drupal.php").is_file()
+        or (folder / "web" / "core" / "lib" / "Drupal.php").is_file()
+        or requires_package(folder, "drupal/core-recommended")
+    )
+
+
+def is_joomla(folder: Path) -> bool:
+    return (folder / "administrator").is_dir() and (folder / "libraries" / "src").is_dir()
 
 
 def has_bedrock_web_app_folder(folder: Path) -> bool:
@@ -123,14 +179,46 @@ def has_wp_content_folders(folder: Path) -> bool:
     return (folder / "themes").is_dir() and (folder / "plugins").is_dir()
 
 
-def holds_site_marker(folder: Path) -> bool:
+def is_wordpress(folder: Path) -> bool:
     return (
         (folder / "wp-config.php").is_file()
-        or (folder / "artisan").is_file()
         or requires_roots_wordpress(folder)
         or has_bedrock_web_app_folder(folder)
         or is_wordpress_theme(folder)
+        or has_wp_content_folders(folder)
     )
+
+
+def holds_app_marker(folder: Path) -> bool:
+    """A marker of a named app. index.php is not one: it is how a plain PHP app is found, at the folder given only."""
+    return (
+        (folder / "wp-config.php").is_file()
+        or has_artisan(folder)
+        or has_bin_console(folder)
+        or requires_roots_wordpress(folder)
+        or requires_package(folder, "statamic/cms")
+        or requires_package(folder, "symfony/framework-bundle")
+        or has_bedrock_web_app_folder(folder)
+        or is_wordpress_theme(folder)
+        or is_drupal(folder)
+        or is_joomla(folder)
+    )
+
+
+def has_index_php_of_its_own(folder: Path) -> bool:
+    """has_index_php, except that a public/ or web/ holding an app marker keeps its index.php to itself.
+
+    WordPress ships an index.php. Local installs it at <site>/app/public and agencies keep it
+    in public/ beside their build tools; neither app/ nor that root is a plain PHP app.
+    """
+    return any(
+        (folder / docroot / "index.php").is_file() and (docroot == "." or not holds_app_marker(folder / docroot))
+        for docroot in INDEX_PHP_DOCROOTS
+    )
+
+
+def holds_site_marker(folder: Path) -> bool:
+    return holds_app_marker(folder) or has_index_php_of_its_own(folder)
 
 
 def is_home_or_filesystem_root(folder: Path) -> bool:
@@ -153,8 +241,24 @@ def promote_to_wp_content_root(candidate: Path, cwd: Path) -> Path:
     return wp_content_root if is_theme_of_wp_content_root and is_inside_given_folder else candidate
 
 
+def promote_to_framework_root(folder: Path) -> Path:
+    """A public/ opened on its own under artisan or bin/console is a framework's docroot: the outer marker wins."""
+    resolved_folder = folder.resolve()
+    app_root = resolved_folder.parent
+    is_framework_docroot = (
+        resolved_folder.name == "public"
+        and not is_home_or_filesystem_root(app_root)
+        and (has_artisan(app_root) or has_bin_console(app_root))
+    )
+    return app_root if is_framework_docroot else folder
+
+
 def find_site_root(cwd: Path) -> Path | None:
     """The folder itself, else the one site one or two levels down; a parent of several sites is not a site.
+
+    A Laravel, Statamic or Symfony public/ opened on its own gives the app root above it.
+    Below the folder given only app markers count: WordPress leaves an index.php in
+    wp-content/, plugins/ and themes/, so a plain PHP app is found only as the folder itself.
 
     Home and the filesystem root are never looked into: listing ~/Documents or ~/Desktop
     raises a macOS file-access prompt, and a hook must never prompt.
@@ -162,15 +266,15 @@ def find_site_root(cwd: Path) -> Path | None:
     if is_home_or_filesystem_root(cwd):
         return None
     if holds_site_marker(cwd):
-        return cwd
+        return promote_to_framework_root(cwd)
     folders_one_level_down = list_child_folders(cwd)
-    candidates = [folder for folder in folders_one_level_down if holds_site_marker(folder)]
+    candidates = [folder for folder in folders_one_level_down if holds_app_marker(folder)]
     if not candidates:
         candidates = [
             folder
             for folder_one_level_down in folders_one_level_down
             for folder in list_child_folders(folder_one_level_down)
-            if holds_site_marker(folder)
+            if holds_app_marker(folder)
         ]
     site_roots = []
     for candidate in candidates:
@@ -181,20 +285,24 @@ def find_site_root(cwd: Path) -> Path | None:
 
 
 def detect_app(site_root: Path) -> str | None:
-    if (site_root / "artisan").is_file():
-        return "laravel"
-    is_wordpress = (
-        (site_root / "wp-config.php").is_file()
-        or requires_roots_wordpress(site_root)
-        or has_bedrock_web_app_folder(site_root)
-        or is_wordpress_theme(site_root)
-        or has_wp_content_folders(site_root)
-    )
-    return "wordpress" if is_wordpress else None
+    """Statamic before Laravel, since both carry artisan; a plain PHP app only when nothing more particular matches."""
+    if has_artisan(site_root):
+        return "statamic" if requires_package(site_root, "statamic/cms") else "laravel"
+    if is_symfony(site_root):
+        return "symfony"
+    if is_wordpress(site_root):
+        return "wordpress"
+    if is_drupal(site_root):
+        return "drupal"
+    if is_joomla(site_root):
+        return "joomla"
+    if has_index_php(site_root):
+        return "phpapp"
+    return None
 
 
 def detect_tree_shape(site_root: Path) -> str:
-    if (site_root / "artisan").is_file():
+    if has_artisan(site_root) or has_bin_console(site_root):
         return "whole_tree"
     if requires_roots_wordpress(site_root) or has_bedrock_web_app_folder(site_root):
         return "bedrock"
@@ -215,6 +323,17 @@ def detect_app_and_shape(site_root: Path, has_git: bool, has_remote: bool) -> tu
     if not has_remote:
         return app, "no_remote"
     return app, detect_tree_shape(site_root)
+
+
+def detect_docroot_guess(site_root: Path, app: str | None) -> str:
+    """The plan's docroot default: public/ for the frameworks, where index.php sits for a plain PHP app, else ""."""
+    if app in APPS_SERVED_FROM_PUBLIC:
+        return "public"
+    if app == "phpapp":
+        for docroot in INDEX_PHP_DOCROOTS:
+            if (site_root / docroot / "index.php").is_file():
+                return docroot
+    return ""
 
 
 def strip_user_info(remote_url: str) -> str:
@@ -330,6 +449,7 @@ def collect_facts(cwd: Path) -> dict:
             "app": app,
         },
         "shape": shape,
+        "docroot_guess": detect_docroot_guess(site_root, app),
         "dirty": facts_from_git["is_dirty"],
         "php": read_php_version(site_root),
     }

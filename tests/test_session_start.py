@@ -54,10 +54,43 @@ def make_laravel(site_folder, *, git=True, remote=DEFAULT_REMOTE, env=None):
     site_folder.mkdir(parents=True, exist_ok=True)
     (site_folder / "artisan").write_text("#!/usr/bin/env php\n<?php\n")
     (site_folder / "composer.json").write_text('{"require": {"laravel/framework": "^11.0"}}\n')
+    (site_folder / "public").mkdir(exist_ok=True); (site_folder / "public" / "index.php").write_text("<?php\n")
     if env is not None:
         (site_folder / ".env").write_text(env)
     if git:
         init_git_repository(site_folder, remote)
+
+
+def make_statamic(site_folder, *, git=True, remote=DEFAULT_REMOTE):
+    make_laravel(site_folder, git=False)
+    (site_folder / "please").write_text("#!/usr/bin/env php\n<?php\n")
+    (site_folder / "composer.json").write_text('{"require": {"laravel/framework": "^11.0", "statamic/cms": "^5.0"}}\n')
+    (site_folder / "public").mkdir(exist_ok=True); (site_folder / "public" / "index.php").write_text("<?php\n")
+    (site_folder / "content").mkdir(exist_ok=True)
+    if git: init_git_repository(site_folder, remote)
+
+
+def make_symfony(site_folder, *, git=True, remote=DEFAULT_REMOTE):
+    (site_folder / "bin").mkdir(parents=True, exist_ok=True)
+    (site_folder / "bin" / "console").write_text("#!/usr/bin/env php\n<?php\n")
+    (site_folder / "composer.json").write_text('{"require": {"symfony/framework-bundle": "^7.0"}}\n')
+    (site_folder / "public").mkdir(exist_ok=True); (site_folder / "public" / "index.php").write_text("<?php\n")
+    (site_folder / ".env").write_text("APP_ENV=dev\nMESSENGER_TRANSPORT_DSN=doctrine://default\n")
+    if git: init_git_repository(site_folder, remote)
+
+
+def make_phpapp(site_folder, docroot, *, git=True, remote=DEFAULT_REMOTE):
+    target = site_folder if docroot == "." else site_folder / docroot
+    target.mkdir(parents=True, exist_ok=True)
+    (target / "index.php").write_text("<?php echo 'hi';\n")
+    if git: init_git_repository(site_folder, remote)
+
+
+def make_static_site(site_folder, *, git=True, remote=DEFAULT_REMOTE):
+    (site_folder / "dist").mkdir(parents=True, exist_ok=True)
+    (site_folder / "dist" / "index.html").write_text("<!doctype html>\n")
+    (site_folder / "package.json").write_text('{"scripts": {"build": "vite build"}}\n')
+    if git: init_git_repository(site_folder, remote)
 
 
 def make_bedrock(site_folder, *, git=True, remote=DEFAULT_REMOTE):
@@ -101,7 +134,7 @@ def test_a_classic_wordpress_repo_gives_remote_branch_root_and_shape(tmp_path):
     make_wordpress(tmp_path)
     facts = recon(tmp_path)
     assert facts["is_site"] is True
-    assert list(facts) == ["is_site", "repo", "shape", "dirty", "php"]
+    assert list(facts) == ["is_site", "repo", "shape", "docroot_guess", "dirty", "php"]
     assert list(facts["repo"]) == REPO_KEYS
     assert facts["repo"]["remote_url"] == "git@github.com:ake/site.git"
     assert facts["repo"]["branch"] in ("main", "master")
@@ -198,6 +231,84 @@ def test_bedrock_laravel_and_theme_only_are_told_apart(tmp_path):
     make_theme_only(tmp_path / "theme")
     theme_facts = recon(tmp_path / "theme")
     assert (theme_facts["repo"]["app"], theme_facts["shape"]) == ("wordpress", "theme_only")
+
+
+def test_statamic_is_told_from_laravel_by_its_composer_requirement(tmp_path):
+    make_statamic(tmp_path / "brand")
+    facts = recon(tmp_path / "brand")
+    assert facts["repo"]["app"] == "statamic" and facts["docroot_guess"] == "public" and facts["shape"] == "whole_tree"
+
+
+def test_a_laravel_repo_with_an_unreadable_composer_json_is_still_laravel(tmp_path):
+    make_laravel(tmp_path / "shop"); (tmp_path / "shop" / "composer.json").write_text("{not json")
+    assert recon(tmp_path / "shop")["repo"]["app"] == "laravel"
+
+
+def test_symfony_is_found_by_bin_console_and_its_bundle(tmp_path):
+    make_symfony(tmp_path / "api")
+    facts = recon(tmp_path / "api")
+    assert facts["repo"]["app"] == "symfony" and facts["docroot_guess"] == "public"
+
+
+@pytest.mark.parametrize("docroot, guess", [(".", "."), ("public", "public"), ("web", "web"), ("htdocs", "")])
+def test_a_plain_php_app_is_phpapp_with_its_docroot_guess(tmp_path, docroot, guess):
+    make_phpapp(tmp_path / "tools", docroot)
+    facts = recon(tmp_path / "tools")
+    if docroot == "htdocs":
+        assert facts == {"is_site": False}        # htdocs/index.php is not a marker: the hook stays quiet
+    else:
+        assert facts["repo"]["app"] == "phpapp" and facts["docroot_guess"] == guess
+
+
+def test_a_static_site_does_not_fire_the_hook(tmp_path):
+    make_static_site(tmp_path / "brochure")
+    assert recon(tmp_path / "brochure") == {"is_site": False}
+
+
+def test_a_statamic_site_opened_inside_public_is_found_above(tmp_path):
+    make_statamic(tmp_path / "brand")
+    assert recon(tmp_path / "brand" / "public")["repo"]["app"] == "statamic"
+
+
+def test_a_laravel_app_with_wordpress_under_public_is_named_laravel_by_the_hook(tmp_path):
+    make_laravel(tmp_path / "shop")
+    (tmp_path / "shop" / "public" / "wp-content").mkdir(parents=True)
+    (tmp_path / "shop" / "public" / "wp-config.php").write_text("<?php\n")
+    assert recon(tmp_path / "shop")["repo"]["app"] == "laravel"
+
+
+def test_drupal_and_joomla_are_named_so_the_platform_can_refuse_them(tmp_path):
+    drupal = tmp_path / "d"; (drupal / "web" / "core" / "lib").mkdir(parents=True)
+    (drupal / "web" / "core" / "lib" / "Drupal.php").write_text("<?php\n"); init_git_repository(drupal, DEFAULT_REMOTE)
+    joomla = tmp_path / "j"; (joomla / "administrator").mkdir(parents=True); (joomla / "libraries" / "src").mkdir(parents=True)
+    (joomla / "index.php").write_text("<?php\n"); init_git_repository(joomla, DEFAULT_REMOTE)
+    assert recon(drupal)["repo"]["app"] == "drupal"
+    assert recon(joomla)["repo"]["app"] == "joomla"
+
+
+def test_the_repo_keys_are_still_exactly_six_and_docroot_guess_sits_beside_shape(tmp_path):
+    make_laravel(tmp_path / "shop")
+    facts = recon(tmp_path / "shop")
+    assert list(facts["repo"]) == REPO_KEYS and "docroot_guess" in facts and "docroot_guess" not in facts["repo"]
+
+
+def test_a_wordpress_in_public_lends_its_index_php_to_no_plain_php_app_above_it(tmp_path):
+    # WordPress ships its own index.php. Local keeps the install at <site>/app/public, and an
+    # agency repo keeps it in public/ beside its build tools: either way it is WordPress, not a phpapp.
+    local_site_folder = tmp_path / "my-local-site"
+    make_wordpress(local_site_folder / "app" / "public", git=False)
+    (local_site_folder / "app" / "public" / "index.php").write_text("<?php\n")
+    init_git_repository(local_site_folder, DEFAULT_REMOTE)
+    for opened_folder in (local_site_folder, local_site_folder / "app"):
+        facts = recon(opened_folder)
+        assert (facts["repo"]["app"], facts["docroot_guess"]) == ("wordpress", ""), opened_folder
+    agency_repository = tmp_path / "agency-site"
+    make_wordpress(agency_repository / "public", git=False)
+    (agency_repository / "public" / "index.php").write_text("<?php\n")
+    (agency_repository / "package.json").write_text('{"scripts": {"build": "gulp"}}\n')
+    init_git_repository(agency_repository, DEFAULT_REMOTE)
+    agency_facts = recon(agency_repository)
+    assert (agency_facts["repo"]["app"], agency_facts["shape"]) == ("wordpress", "whole_tree")
 
 
 def test_a_style_css_without_a_theme_name_in_its_first_twenty_lines_is_not_a_theme(tmp_path):
