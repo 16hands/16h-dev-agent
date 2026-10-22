@@ -421,10 +421,26 @@ def test_recon_gives_up_silently_at_its_deadline(tmp_path):
     slow_git = slow_bin_folder / "git"
     slow_git.write_text("#!/bin/sh\nexec sleep 5\n")
     slow_git.chmod(0o755)
-    environment = {**os.environ, "PATH": f"{slow_bin_folder}{os.pathsep}{os.environ['PATH']}"}
+    # Every git call hangs. Each would end at its own 2 s timeout, so the
+    # overall deadline is lowered to 1 s through its environment knob to prove
+    # the alarm itself ends the recon, silently, before any call returns.
+    environment = {**os.environ, "PATH": f"{slow_bin_folder}{os.pathsep}{os.environ['PATH']}",
+                   "RECON_DEADLINE_SECONDS": "1"}
     started = time.monotonic()
     assert recon(tmp_path / "site", environment=environment) is None
     assert time.monotonic() - started < 1.9
+
+
+def test_the_deadline_knob_only_ever_shortens(tmp_path, monkeypatch):
+    import importlib.util
+    spec = importlib.util.spec_from_file_location("recon_under_test", RECON)
+    recon_module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(recon_module)
+    for junk_or_long in ("", "junk", "0", "-3", "60"):
+        monkeypatch.setenv("RECON_DEADLINE_SECONDS", junk_or_long)
+        assert recon_module.deadline_seconds() == recon_module.RECON_DEADLINE_SECONDS
+    monkeypatch.setenv("RECON_DEADLINE_SECONDS", "2")
+    assert recon_module.deadline_seconds() == 2
 
 
 PLATFORM_VARIABLES = ("CLAUDE_PLUGIN_ROOT", "CURSOR_PLUGIN_ROOT", "COPILOT_CLI", "MUSE_PLUGIN_ROOT")

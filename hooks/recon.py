@@ -10,6 +10,7 @@ can never block a session.
 from __future__ import annotations
 
 import json
+import os
 import re
 import signal
 import stat
@@ -17,7 +18,14 @@ import subprocess
 import sys
 from pathlib import Path
 
-RECON_DEADLINE_SECONDS = 1
+# The whole recon, armed with signal.alarm in main: one bound for every git
+# call and file read together, far under any harness timeout. Not 1 s: a
+# whole-tree WordPress repo whose index is stat-stale (4,000 files after a
+# copy, a branch switch or a build tool) takes git status 1.2 s to refresh, and
+# --no-optional-locks never writes that refresh back, so a 1 s deadline dropped
+# the project block on every session start in such a repo (re-review,
+# 2026-10-22). The fixtures still finish in well under a second.
+RECON_DEADLINE_SECONDS = 5
 SUBPROCESS_TIMEOUT_SECONDS = 2
 FILE_READ_CAP_BYTES = 256 * 1024
 THEME_HEADER_CHARACTER_COUNT = 8 * 1024
@@ -332,10 +340,23 @@ def give_up_silently(signal_number, interrupted_frame) -> None:
     sys.exit(0)
 
 
+def deadline_seconds() -> int:
+    """RECON_DEADLINE_SECONDS, unless the environment names a shorter positive
+    number — the tests' knob for proving the alarm fires, since every git call
+    ends at its own timeout long before five seconds."""
+    try:
+        override_seconds = int(os.environ.get("RECON_DEADLINE_SECONDS", ""))
+    except ValueError:
+        return RECON_DEADLINE_SECONDS
+    if 0 < override_seconds < RECON_DEADLINE_SECONDS:
+        return override_seconds
+    return RECON_DEADLINE_SECONDS
+
+
 def arm_deadline() -> None:
     if hasattr(signal, "SIGALRM"):
         signal.signal(signal.SIGALRM, give_up_silently)
-        signal.alarm(RECON_DEADLINE_SECONDS)
+        signal.alarm(deadline_seconds())
 
 
 def disarm_deadline() -> None:
