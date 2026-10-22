@@ -3,11 +3,12 @@
 Your coding agent, with access to the other side of the work: the site as it
 actually runs on 16Hands hosting.
 
-It reads a client's live errors from the platform's aggregated logs, so when
-someone says "a customer hit an error this morning" the agent can go and look
-instead of guessing — and it puts a site that runs on the dev's own machine
-onto a 16h devsite, then pushes later changes to it. Production stays a
-person's click in the panel.
+Open a repo and the agent already knows which site it is, what is live, and
+whether anything is erroring. When someone says "a customer hit an error this
+morning" it goes and reads the live errors instead of guessing. It reads the
+site's traffic, puts your change on a devsite for you to look at, and releases
+to production — only when the site's owner has turned that on in the 16h
+panel, and only after you have said yes to what will change.
 
 ## Install
 
@@ -18,40 +19,80 @@ In Claude Code:
 /plugin install 16h-dev-agent@16hands
 ```
 
-That installs the tools and the workflow skill. Nothing is added to your
-project — no config files, no per-repo setup.
+In Codex:
+
+```
+codex plugin marketplace add 16hands/16h-dev-agent
+```
+
+then, inside Codex:
+
+1. `/plugins` → install **16h-dev-agent**.
+2. `/hooks` → trust the 16h-dev-agent session-start hook. You do this once.
+
+Do not skip step 2. Codex runs no plugin hook until you have trusted it, and
+without the hook a session starts knowing nothing about your repo: no first
+call to 16h, no project named, until you ask.
+
+Either way, that installs the hook, the skills and the connection to 16h.
+Nothing is added to your project to make it work — no config files, no
+per-repo setup.
 
 ## Signing in
 
 Access is invite-only: your contact at 16Hands creates your login and chooses
-which clients you can see. The first time a tool runs, a browser opens for you
-to sign in. There are no keys or tokens to copy, and nothing secret lives in
-this repository.
+which clients you can see. The first time the agent connects to 16h, a browser
+opens for you to sign in. There are no keys or tokens to copy, and nothing
+secret lives in this repository.
 
-## What you get
+## What happens when you open a repo
 
-| Tool | What it does |
-|---|---|
-| `logs_read` | Recent errors for one of your clients, across the whole fleet, newest first |
-| `site_plan` | Looks at the site running on your machine and proposes a devsite — name, PHP, what travels. Changes nothing |
-| `site_create` | Creates the devsite you confirmed, and hands back upload URLs |
-| `site_push` | Imports what you uploaded: code, database, media |
-| `site_status` | Where the devsite is up to, and the one-shot wp-admin login once it is live |
-
-Ask in plain language — "read recent errors for `<client>`", "put this
-WordPress on a devsite" — rather than calling tools by name.
+1. **The session-start hook runs.** It looks at the folder on your machine and
+   nowhere else: the git remote, the branch, the hostnames in `.env` or
+   `wp-config.php`, the folder name and the kind of app. No token, no network,
+   nothing written. It hands those facts to the agent with a short
+   introduction to 16h.
+2. **The agent's first call is `site_status`**, with those facts.
+3. **When 16h knows the repo**, the agent opens by naming the project: the
+   client, production, the devsites, the last push, errors in the last hour,
+   and whether the site is reachable. Then it does what you asked.
+4. **When nothing on 16h matches**, the agent lists the sites you can see and
+   asks once which one this repo is. Your answer is remembered on 16h, by the
+   repo's git remote, not in the repo — so the next session, in either agent,
+   opens with the project named.
 
 ## Skills
 
+Each skill is named for a moment. Say what is happening in your own words and
+the matching skill takes over:
+
 | Skill | When it applies |
 |---|---|
-| `16h-dev-agent` | Working on a hosted site: investigating a reported error, reading what the platform sees |
-| `devsite-import` | Putting a WordPress or Laravel site that runs on your machine onto a `*.devsite.co.nz` devsite, and pushing later changes to it |
+| `using-16h` | Every session — the hook injects it. The first call, the moments below, and the rules that never change |
+| `debugging-a-live-site` | "it's erroring", "the site is down", "slow", "500", "customers can't check out", "a client emailed", "why is the site 500ing" |
+| `reading-traffic` | "who's hitting the site", "is it a bot", "what happened at 2pm", "are our emails going out", "did the cron run" |
+| `pushing-to-staging` | "put this on staging", "push my changes", "give me a devsite", "I want to see it before it goes live", "send the fix to the devsite" |
+| `releasing-to-production` | "deploy to prod", "go live", "ship it", "push to production", "release this" |
+| `verifying-a-deploy` | After any push, and "is it up?", "did that work?", "is the deploy done?" |
 
-`devsite-import` teaches the whole path: finding the folder the site actually
-runs from, what to send and what to leave behind, the questions you get asked
-before anything is created, and the upload. Going **live** is not in it —
-that stays a click in the 16h panel.
+Two of them hold a line. `debugging-a-live-site` changes no code until the
+error is named from the platform's logs. `releasing-to-production` goes ahead
+only when the site's owner has turned on agent pushes in the 16h panel, and
+only after you have heard every line of what will change and said yes.
+
+## Records in `docs/16h/`
+
+Two skills leave a record in your repo:
+
+- `docs/16h/releases/` — a note after every production push: who said yes,
+  when, the plan's digest, what changed, and how the site answered afterwards.
+- `docs/16h/investigations/` — a note when the agent names a live-site fault:
+  the report, the evidence lines from the logs, the hypothesis, and what was
+  changed or ruled out.
+
+They are yours to commit or not, and the next session can read them. Nothing
+else is ever written to your repo, never a secret, and the plugin needs none of
+it to work.
 
 ## What it deliberately cannot do
 
@@ -62,16 +103,17 @@ access.
 
 ## Other agents
 
-The server is a standard remote MCP endpoint, so anything that speaks MCP can
-use it:
+The skills follow the [Agent Skills](https://agentskills.io) standard, so
+agents that read it — Cursor and GitHub Copilot among them — can use the
+folders in `skills/`. Connect them to 16h through its standard remote MCP
+endpoint:
 
 ```
 https://mcp.16h.io/mcp
 ```
 
-For Codex, Cursor and similar, add that as an HTTP MCP server. The workflow
-skill in `skills/` is worth reading into your project instructions if your
-tool does not support Claude Code plugins.
+Add that as an HTTP MCP server. Those agents have no session-start hook from
+this plugin yet, so open a session by asking for the site's status on 16h.
 
 ## Support
 
