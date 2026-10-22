@@ -75,3 +75,44 @@ def test_debugging_names_the_gate_and_the_investigation_note():
 
 def test_the_old_skills_are_gone():
     assert not (SKILLS / "16h-dev-agent").exists() and not (SKILLS / "devsite-import").exists()
+
+
+PUSHING_REFERENCES = SKILLS / "pushing-to-staging" / "references"
+PARTS = ("code.zip", "database.sql.gz", "uploads.zip")
+
+
+def deployignore_patterns(reference_path):
+    """The lines of the fenced block under a reference's `.deployignore` heading."""
+    section = reference_path.read_text().split("## `.deployignore`", 1)[1]
+    fenced_block = section.split("```", 2)[1]
+    return [line.strip() for line in fenced_block.splitlines() if line.strip()]
+
+
+@pytest.mark.parametrize("reference", ["wordpress.md", "laravel.md"])
+def test_each_deployignore_keeps_out_records_dumps_and_archives_and_whole_folders(reference):
+    patterns = deployignore_patterns(PUSHING_REFERENCES / reference)
+    for required_pattern in ("docs/16h/*", "*.sql", "*.sql.gz", "*.zip"):
+        assert required_pattern in patterns, required_pattern
+    # zip matches a pattern against file paths: `dir/` drops only the folder's own entry, never its files.
+    assert [pattern for pattern in patterns if pattern.endswith("/")] == []
+
+
+def test_pushing_to_staging_step_5_lists_every_pattern_its_references_list():
+    body = (SKILLS / "pushing-to-staging" / "SKILL.md").read_text()
+    step_5 = body.split("## Step 5", 1)[1].split("## Step 6", 1)[0]
+    for reference in ("wordpress.md", "laravel.md"):
+        for pattern in deployignore_patterns(PUSHING_REFERENCES / reference):
+            assert f"`{pattern}`" in step_5, (reference, pattern)
+
+
+def test_no_build_command_writes_a_part_into_the_site_root():
+    for skill_file in SKILLS.rglob("*.md"):
+        text = skill_file.read_text()
+        for part in PARTS:
+            assert f"zip -r -q {part}" not in text and f"> {part}" not in text, (skill_file.name, part)
+
+
+def test_laravel_ships_vendor_and_the_storage_skeleton():
+    # The lane runs no composer install, and seeds the shared storage from the first release.
+    patterns = deployignore_patterns(PUSHING_REFERENCES / "laravel.md")
+    assert [pattern for pattern in patterns if pattern.startswith(("vendor", "storage/*", "storage/framework"))] == []

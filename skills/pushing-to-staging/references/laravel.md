@@ -45,8 +45,8 @@ git_branch="$(git rev-parse --abbrev-ref HEAD 2>/dev/null)"
 - `siteurl` is `APP_URL`. If tinker is unavailable, read `APP_URL` from `.env`
   — **read it, never upload it**.
 - `uploads_size_bytes` has no Laravel meaning: pass `null`. Public user media
-  under `storage/app/public` is not moved by this flow; say so if the app has
-  any, and move it separately.
+  under `storage/app/public` travels once, inside `storage/` on the first
+  push; after that the platform keeps its own copy. Say so if the app has any.
 - `db_size_bytes`: only if you can get it cheaply, e.g.
   `php artisan db:show --json` (Laravel 10+) or a
   `SELECT SUM(data_length+index_length)` against `information_schema.TABLES`.
@@ -55,41 +55,57 @@ git_branch="$(git rev-parse --abbrev-ref HEAD 2>/dev/null)"
 ## `.deployignore`
 
 ```
-vendor/
-node_modules/
-storage/
+node_modules/*
+storage/logs/*.log
 .env
-.git/
+.git/*
+docs/16h/*
+*.sql
+*.sql.gz
+*.zip
 ```
 
 | Line | Why |
 |---|---|
-| `vendor/` | a build product of `composer install` |
-| `node_modules/` | build input only |
-| `storage/` | runtime state — logs, cache, sessions, uploaded files. The platform keeps its own, shared across releases |
+| `node_modules/*` | build input only |
+| `storage/logs/*.log` | local logs: weight, and whatever the app wrote to them. The folder itself travels |
 | `.env` | **never travels.** The platform writes the app's environment from the database row and the client's secrets |
-| `.git/` | history is not a deploy artifact |
+| `.git/*` | history is not a deploy artifact, and `.git/config` can hold a token |
+| `docs/16h/*` | the release notes and investigations are the developer's records, not the app's |
+| `*.sql`, `*.sql.gz`, `*.zip` | a dump or an archive left in the tree must never ship with the code |
+
+Write every folder as `dir/*`: zip matches each pattern against a file's path,
+so `dir/` leaves out only the folder's own entry and packs every file in it.
+
+Two folders travel on purpose; take out any `.deployignore` line for either:
+
+- **`vendor/`** — the lane runs no `composer install` yet (wave 2), so the app
+  boots only on the `vendor/` in the zip. Run `composer install` first if it
+  is missing, and check the zip against the 2 GiB code cap.
+- **`storage/`** — the first push seeds the platform's shared `storage` from
+  the zip, `framework/` folders included; every later push links that shared
+  copy over the one in the zip.
 
 Keep built front-end assets **in** the zip (`public/build`, `public/css`,
 `public/js`) — run `npm run build` locally before zipping.
 
-**Until the lane runs `composer install` (wave 2), an app with no committed
-`vendor/` will not boot on the devsite.** If that is your case, say so, remove
-the `vendor/` line from `.deployignore` before zipping, and check the result
-against the 2 GiB code cap. Note it when you hand the site over.
-
 ## Building the parts
+
+Build in a fresh folder outside the app root, print its path for the upload,
+and delete it once every part has answered `204` (`rm -rf "$parts_folder"`):
+a part left in the app root rides in the next `code.zip`.
 
 ```bash
 npm run build                                # if the app has a front-end build
-zip -r -q code.zip . -x@.deployignore
+parts_folder="$(mktemp -d)"; echo "$parts_folder"
+zip -r -q "$parts_folder/code.zip" . -x@.deployignore
 ```
 
 The `database` part is `database.sql.gz` as for WordPress — a gzipped mysqldump
-of the local schema:
+of the local schema, into the same folder:
 
 ```bash
-mysqldump --single-transaction "$local_database_name" | gzip > database.sql.gz
+mysqldump --single-transaction "$local_database_name" | gzip > "$parts_folder/database.sql.gz"
 ```
 
 Only build it if `include_database` was answered yes, and remember the lane's
@@ -105,6 +121,7 @@ person answers `rewrite_urls`, and fix it in the app's own data afterwards.
 - Migrations are not run by the import. If the app needs them, say so; that is
   a job for the panel or the client's own deploy script today.
 - Later changes: the *later* path in `SKILL.md` — `site_plan` with
-  `site_key`, rebuild `code.zip`, and `site_push(parts=["code"], answers)`; or,
+  `site_key`, rebuild `code.zip` in a fresh parts folder, and
+  `site_push(parts=["code"], answers)`; or,
   if the dev said yes to `git_pull`, let the pull lane serve it.
 - Going live is the `releasing-to-production` skill.

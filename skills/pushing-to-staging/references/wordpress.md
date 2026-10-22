@@ -75,40 +75,54 @@ no core-install step behind it, so raising it only produces a dead end.
 ## `.deployignore`
 
 ```
-wp-content/uploads/
-wp-content/cache/
-wp-content/upgrade/
-node_modules/
-.git/
+wp-content/uploads/*
+wp-content/cache/*
+wp-content/upgrade/*
+node_modules/*
+.git/*
 .env
 wp-config.php
+docs/16h/*
+*.sql
+*.sql.gz
+*.zip
 ```
 
 | Line | Why |
 |---|---|
-| `wp-content/uploads/` | travels as its own part, and is shared across releases on the platform |
-| `wp-content/cache/`, `upgrade/` | regenerated; pure weight |
-| `node_modules/` | build input, never runtime |
-| `.git/` | history is not a deploy artifact, and it can be large |
+| `wp-content/uploads/*` | travels as its own part, and is shared across releases on the platform |
+| `wp-content/cache/*`, `upgrade/*` | regenerated; pure weight |
+| `node_modules/*` | build input, never runtime |
+| `.git/*` | history is not a deploy artifact, it can be large, and `.git/config` can hold a token |
 | `.env`, `wp-config.php` | the platform writes its own config from the database row it created — local DB credentials must not travel |
+| `docs/16h/*` | the release notes and investigations are the developer's records; in `code.zip` they would be served at a guessable URL |
+| `*.sql`, `*.sql.gz`, `*.zip` | the site serves every file `code.zip` carries, so a dump or an archive left in the tree is one anyone can download |
 
-Add to it freely (`*.sql`, `wp-content/backups/`, a local `mu-plugins` debug
-drop-in). Show the final file before zipping.
+Write every folder as `dir/*`: zip matches each pattern against a file's path,
+so `dir/` leaves out only the folder's own entry and packs every file in it.
+`*.zip` also leaves out a theme's bundled plugin archives; the plugins they
+install are already in `wp-content/plugins`. Add to it freely
+(`wp-content/backups/*`, a local `mu-plugins` debug drop-in). Show the final
+file before zipping.
 
 ## Building the parts
 
 ```bash
-zip -r -q code.zip . -x@.deployignore
-wp db export - | gzip > database.sql.gz
-zip -r -q uploads.zip wp-content/uploads
+parts_folder="$(mktemp -d)"; echo "$parts_folder"
+zip -r -q "$parts_folder/code.zip" . -x@.deployignore
+wp db export - | gzip > "$parts_folder/database.sql.gz"
+zip -r -q "$parts_folder/uploads.zip" wp-content/uploads
 ```
 
-- `-x@.deployignore` reads the patterns from the file; keep the trailing `/` on
-  directory entries.
-- `wp db export -` writes to stdout, so nothing lands on disk unencrypted
-  twice. Add `--single-transaction` on a busy local DB.
-- `uploads.zip` keeps the `wp-content/uploads` prefix on purpose — the lane
-  unpacks it into the shared uploads directory.
+- Build in a fresh folder outside the site root, and delete it once every part
+  has answered `204` (`rm -rf "$parts_folder"`): a part left in the site root
+  rides in the next `code.zip`, and production serves it. Print the path and
+  reuse it, since the next command may run in a new shell.
+- `-x@.deployignore` reads the patterns from the file.
+- `wp db export -` writes to stdout, so the dump lands on disk once, in the
+  parts folder. Add `--single-transaction` on a busy local DB.
+- `uploads.zip` keeps the `wp-content/uploads` prefix on purpose — run it from
+  the site root; the lane unpacks it into the shared uploads directory.
 - Check sizes against the caps (code 2 GiB, database 1 GiB, uploads 2 GiB)
   **before** uploading. Over cap on uploads is the common one: answer no to
   `include_uploads`, get the site up, and move the media afterwards.
@@ -138,6 +152,7 @@ has a restore point behind it. Say that when the `database` warning lands.
 - The devsite is `noindex`. A `401` from one that is password-protected
   means it is up, not down.
 - Later changes: the *later* path in `SKILL.md` — `site_plan` with
-  `site_key`, rebuild `code.zip`, upload it to the plan's own POST, and
+  `site_key`, rebuild `code.zip` in a fresh parts folder, upload it to the
+  plan's own POST, and
   `site_push(parts=["code"], answers)`. Code-only pushes take about twenty
   seconds and do not touch the database.

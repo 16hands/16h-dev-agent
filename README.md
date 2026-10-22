@@ -95,9 +95,10 @@ Two skills leave a record in your repo:
   the report, the evidence lines from the logs, the hypothesis, and what was
   changed or ruled out.
 
-They are yours to commit or not, and the next session can read them. Nothing
-else is ever written to your repo, never a secret, and the plugin needs none of
-it to work.
+They are yours to commit or not, and the next session can read them. A push
+also writes `.deployignore`, the list of what the upload leaves out, yours to
+keep like a `.gitignore`. Nothing else is ever written to your repo, never a
+secret, and the plugin needs none of it to work.
 
 ## What it deliberately cannot do
 

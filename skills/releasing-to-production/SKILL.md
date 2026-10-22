@@ -46,7 +46,7 @@ Then the plan's questions, in order:
 
 ## 4. Upload, push
 
-Build the parts and upload each to its POST in the plan's `uploads`, as `pushing-to-staging` steps 5 and 6 do. A part named in `parts` that never reached its POST is refused: `part X has not been uploaded — POST it to the URL from site_plan first`.
+Build the parts in a fresh folder outside the site root, upload each to its POST in the plan's `uploads`, then delete the folder, as `pushing-to-staging` steps 5 and 6 do. Never build them in the site root: this `code.zip` or the next would carry the dump, and production would serve it. Check `.deployignore` carries `docs/16h/*` before zipping — the release notes live there. A part named in `parts` that never reached its POST is refused: `part X has not been uploaded — POST it to the URL from site_plan first`.
 
 `site_push(site_key, plan_id, parts, confirm: true, digest, include_database)`, with `digest` exactly as the plan returned it, and `include_database` only when the plan asked it — on a Laravel plan it is refused as a question the plan never asked. It returns a `task_id`; then `verifying-a-deploy`, five-minute look included.
 

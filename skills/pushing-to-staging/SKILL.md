@@ -78,31 +78,34 @@ The name comes from `folder_name`. A taken one is refused with two others — `n
 
 `site_create(plan_id, answers)` returns `site_key`, `url` and an `uploads` map of presigned POSTs (`code`, `database`, `uploads`).
 
-## Step 5 — `.deployignore`, then build the parts
+## Step 5 — `.deployignore`, then build the parts outside the site root
 
-Write `.deployignore` in the site root if it is absent, and show it.
+Write `.deployignore` in the site root if it is absent; if it is there, add each line below that it lacks and rewrite any `dir/` line as `dir/*` — on Laravel, take a `vendor/` or `storage/` line out instead. Show it.
 
-- WordPress: `wp-content/uploads/`, `wp-content/cache/`, `wp-content/upgrade/`, `node_modules/`, `.git/`, `.env`, `wp-config.php`
-- Laravel: `vendor/`, `node_modules/`, `storage/`, `.env`, `.git/`
+- WordPress: `wp-content/uploads/*`, `wp-content/cache/*`, `wp-content/upgrade/*`, `node_modules/*`, `.git/*`, `.env`, `wp-config.php`, `docs/16h/*`, `*.sql`, `*.sql.gz`, `*.zip`
+- Laravel: `node_modules/*`, `storage/logs/*.log`, `.env`, `.git/*`, `docs/16h/*`, `*.sql`, `*.sql.gz`, `*.zip` — `vendor/` and `storage/` travel, for the reasons in its reference
 
-`wp-config.php` and `.env` are excluded on purpose — the platform writes its own. Build only the parts answered yes.
+Write a folder as `dir/*`: zip matches each pattern against file paths, so `dir/` leaves out only the folder's own entry and every file in it still goes in. `wp-config.php` and `.env` are excluded on purpose — the platform writes its own. The site serves whatever `code.zip` carries, so `docs/16h/*`, dumps and archives stay out: a dump in the tree is a dump anyone can download.
+
+Build only the parts answered yes, in a fresh folder outside the site root — a part built in the site root rides in the next `code.zip`, and production serves it. Print the folder's path and use it in step 6, since the next command may run in a new shell:
 
 ```bash
-zip -r -q code.zip . -x@.deployignore
-wp db export - | gzip > database.sql.gz
-zip -r -q uploads.zip wp-content/uploads
+parts_folder="$(mktemp -d)"; echo "$parts_folder"
+zip -r -q "$parts_folder/code.zip" . -x@.deployignore
+wp db export - | gzip > "$parts_folder/database.sql.gz"
+zip -r -q "$parts_folder/uploads.zip" wp-content/uploads
 ```
 
-## Step 6 — upload to the presigned POSTs
+## Step 6 — upload to the presigned POSTs, then delete the parts
 
 Each entry has `url` and `fields`. **One `-F name=value` per returned field, and `-F file=@<part>` LAST** — S3 ignores anything after `file`.
 
 ```bash
 curl -s -o /dev/null -w '%{http_code}\n' "$upload_url" \
-  -F key="$field_key" -F policy="$field_policy" -F ... -F file=@code.zip
+  -F key="$field_key" -F policy="$field_policy" -F ... -F file=@"$parts_folder/code.zip"
 ```
 
-`204` is success. URLs live one hour; caps are code 2 GiB, database 1 GiB, uploads 2 GiB — over cap, answer no to that part and re-plan.
+`204` is success. URLs live one hour; caps are code 2 GiB, database 1 GiB, uploads 2 GiB — over cap, answer no to that part and re-plan. Once every part has answered `204`, delete the folder: `rm -rf "$parts_folder"`.
 
 ## Step 7 — push, then verify
 
