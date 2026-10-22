@@ -34,8 +34,8 @@ Two rules that save a wasted upload:
 | No WP-CLI at all | fall back below |
 
 **No WP-CLI fallback.** Do not guess. Read `siteurl` from the database with the
-credentials in `wp-config.php`, take `php` from `php -v`, and pass
-`db_size_bytes: null`. A `null` makes the plan ask; a wrong number does not.
+credentials in `wp-config.php`, take `php` from `php -v`, and leave
+`db_size_bytes` out. A missing size makes the plan ask; a wrong number does not.
 
 ## Local facts
 
