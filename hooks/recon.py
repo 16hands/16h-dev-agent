@@ -34,8 +34,9 @@ THEME_HEADER_LINE_COUNT = 20
 HOSTNAME_KEYS = ("APP_URL", "WP_HOME", "WP_SITEURL", "DOMAIN_CURRENT_SITE")
 FOLDERS_NOT_WORTH_WALKING = ("node_modules", "vendor")
 SUBFOLDER_DOCROOTS = ("public", "web")
-# Root first: a plain PHP app's docroot guess is the first of these holding an index.php.
-INDEX_PHP_DOCROOTS = (".",) + SUBFOLDER_DOCROOTS
+# A plain PHP app's docroot guess is the first of these holding an index.php. Subfolders first: with
+# an index.php at the root and in public/, public is the setting that does not serve vendor/ and config.
+INDEX_PHP_DOCROOTS = SUBFOLDER_DOCROOTS + (".",)
 APPS_SERVED_FROM_PUBLIC = ("laravel", "statamic", "symfony")
 WORDPRESS_INNER_FOLDER_NAMES = ("wp-content", "plugins", "themes", "mu-plugins", "wp-admin", "wp-includes")
 
@@ -171,15 +172,20 @@ def is_symfony(folder: Path) -> bool:
 
 
 def is_drupal(folder: Path) -> bool:
+    """Drupal 8 and later by core/lib/Drupal.php or its composer package; Drupal 7 by includes/bootstrap.inc."""
     return (
         is_regular_file(folder / "core" / "lib" / "Drupal.php")
         or is_regular_file(folder / "web" / "core" / "lib" / "Drupal.php")
+        or is_regular_file(folder / "includes" / "bootstrap.inc")
         or requires_package(folder, "drupal/core-recommended")
     )
 
 
 def is_joomla(folder: Path) -> bool:
-    return is_directory(folder / "administrator") and is_directory(folder / "libraries" / "src")
+    """administrator/ beside libraries/src/ (Joomla 3.8 and later) or libraries/joomla/ (3.7 and earlier)."""
+    return is_directory(folder / "administrator") and (
+        is_directory(folder / "libraries" / "src") or is_directory(folder / "libraries" / "joomla")
+    )
 
 
 def has_bedrock_web_app_folder(folder: Path) -> bool:
@@ -206,9 +212,17 @@ def has_wp_content_folders(folder: Path) -> bool:
 
 
 def holds_wordpress_core(folder: Path) -> bool:
-    """wp-load.php or wp-includes/: a WordPress root even without wp-config.php, which repos gitignore
-    and WordPress also reads from one folder up."""
-    return is_regular_file(folder / "wp-load.php") or is_directory(folder / "wp-includes")
+    """wp-load.php, wp-includes/, or an index.php that loads wp-blog-header.php: a WordPress root even
+    without wp-config.php, which repos gitignore and WordPress also reads from one folder up.
+
+    The index.php is WordPress in its own sub-folder (`require __DIR__ . '/wp/wp-blog-header.php';`):
+    composer installs core into a gitignored wp/, so a fresh clone holds nothing else of WordPress's.
+    """
+    return (
+        is_regular_file(folder / "wp-load.php")
+        or is_directory(folder / "wp-includes")
+        or "wp-blog-header.php" in read_wordpress_header(folder / "index.php")
+    )
 
 
 def holds_wordpress_marker(folder: Path) -> bool:
@@ -227,13 +241,15 @@ def is_wordpress(folder: Path) -> bool:
 
 
 def holds_app_marker(folder: Path) -> bool:
-    """A marker of a named app. index.php is not one: it is how a plain PHP app is found, at the folder given only."""
+    """A marker of a named app. index.php is not one: it is how a plain PHP app is found, at the folder given only.
+
+    Nor is a composer.json requiring statamic/cms or symfony/framework-bundle: a Statamic addon or a
+    Symfony bundle requires them too, and every Statamic or Symfony site has artisan or bin/console.
+    """
     return (
         holds_wordpress_marker(folder)
         or has_artisan(folder)
         or has_bin_console(folder)
-        or requires_package(folder, "statamic/cms")
-        or requires_package(folder, "symfony/framework-bundle")
         or is_drupal(folder)
         or is_joomla(folder)
     )
@@ -247,13 +263,9 @@ def is_inside_wordpress_tree(folder: Path) -> bool:
 
 
 def has_root_index_php_of_its_own(folder: Path) -> bool:
-    """An index.php at the folder's root, unless WordPress put it there: wp-admin's own, a "Silence is golden"
-    file in wp-content/, plugins/ or themes/, or the one beside a standalone plugin's header."""
-    return (
-        is_regular_file(folder / "index.php")
-        and not is_inside_wordpress_tree(folder)
-        and not is_wordpress_plugin(folder)
-    )
+    """An index.php at the folder's root, unless WordPress put it there: wp-admin's own, or a "Silence is golden"
+    file in wp-content/, plugins/ or themes/."""
+    return is_regular_file(folder / "index.php") and not is_inside_wordpress_tree(folder)
 
 
 def has_docroot_index_php_of_its_own(folder: Path) -> bool:
@@ -269,11 +281,13 @@ def has_docroot_index_php_of_its_own(folder: Path) -> bool:
 
 
 def holds_site_marker(folder: Path) -> bool:
-    return (
-        holds_app_marker(folder)
-        or has_root_index_php_of_its_own(folder)
-        or has_docroot_index_php_of_its_own(folder)
-    )
+    """An app marker, or an index.php of the folder's own, unless the folder is a WordPress plugin: a plugin
+    keeps a "Silence is golden" index.php beside its header, and the WordPress Plugin Boilerplate one under
+    public/, admin/ and includes/ too."""
+    if holds_app_marker(folder):
+        return True
+    has_index_php_of_its_own = has_root_index_php_of_its_own(folder) or has_docroot_index_php_of_its_own(folder)
+    return has_index_php_of_its_own and not is_wordpress_plugin(folder)
 
 
 def is_home_or_filesystem_root(folder: Path) -> bool:
@@ -341,10 +355,16 @@ def find_site_root(cwd: Path) -> Path | None:
     return site_roots[0] if len(site_roots) == 1 else None
 
 
+def is_statamic(folder: Path) -> bool:
+    """Its composer requirement, or the `please` command beside artisan, which still answers when composer.json
+    cannot be read."""
+    return requires_package(folder, "statamic/cms") or is_regular_file(folder / "please")
+
+
 def detect_app(site_root: Path) -> str | None:
     """Statamic before Laravel, since both carry artisan; a plain PHP app only when nothing more particular matches."""
     if has_artisan(site_root):
-        return "statamic" if requires_package(site_root, "statamic/cms") else "laravel"
+        return "statamic" if is_statamic(site_root) else "laravel"
     if is_symfony(site_root):
         return "symfony"
     if is_wordpress(site_root):
@@ -389,7 +409,8 @@ def detect_app_and_shape(site_root: Path, has_git: bool, has_remote: bool) -> tu
 
 
 def detect_docroot_guess(site_root: Path, app: str | None) -> str:
-    """The plan's docroot default: public/ for the frameworks, where index.php sits for a plain PHP app, else ""."""
+    """The plan's docroot default: public/ for the frameworks, where index.php sits for a plain PHP app (public/
+    or web/ before the root, when two hold one), else ""."""
     if app in APPS_SERVED_FROM_PUBLIC:
         return "public"
     if app == "phpapp":

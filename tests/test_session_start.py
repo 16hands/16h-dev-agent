@@ -243,6 +243,11 @@ def test_a_laravel_repo_with_an_unreadable_composer_json_is_still_laravel(tmp_pa
     assert recon(tmp_path / "shop")["repo"]["app"] == "laravel"
 
 
+def test_a_statamic_repo_with_an_unreadable_composer_json_is_still_statamic_by_its_please_file(tmp_path):
+    make_statamic(tmp_path / "brand"); (tmp_path / "brand" / "composer.json").write_text("{not json")
+    assert recon(tmp_path / "brand")["repo"]["app"] == "statamic"
+
+
 def test_symfony_is_found_by_bin_console_and_its_bundle(tmp_path):
     make_symfony(tmp_path / "api")
     facts = recon(tmp_path / "api")
@@ -258,6 +263,14 @@ def test_a_plain_php_app_is_phpapp_with_its_docroot_guess(tmp_path, docroot, gue
     else:
         assert facts["repo"]["app"] == "phpapp" and facts["docroot_guess"] == guess
         assert facts["shape"] == "whole_tree"
+
+
+def test_a_plain_php_app_with_an_index_php_at_its_root_and_in_public_guesses_public(tmp_path):
+    # public is the setting that does not serve vendor/ and config; the developer is still asked.
+    make_phpapp(tmp_path / "tools", ".", git=False)
+    make_phpapp(tmp_path / "tools", "public")
+    facts = recon(tmp_path / "tools")
+    assert (facts["repo"]["app"], facts["docroot_guess"], facts["shape"]) == ("phpapp", "public", "whole_tree")
 
 
 def test_a_static_site_does_not_fire_the_hook(tmp_path):
@@ -291,6 +304,35 @@ def test_drupal_and_joomla_are_named_so_the_platform_can_refuse_them(tmp_path):
     drupal_facts, joomla_facts = recon(drupal_site_folder), recon(joomla_site_folder)
     assert (drupal_facts["repo"]["app"], drupal_facts["shape"]) == ("drupal", "whole_tree")
     assert (joomla_facts["repo"]["app"], joomla_facts["shape"]) == ("joomla", "whole_tree")
+
+
+def test_joomla_3_7_and_drupal_7_are_named_by_their_older_layouts(tmp_path):
+    # Joomla before 3.8 keeps its framework in libraries/joomla/; Drupal 7 has no core/, only includes/bootstrap.inc.
+    joomla_site_folder = tmp_path / "joomla-3-site"
+    (joomla_site_folder / "administrator").mkdir(parents=True)
+    (joomla_site_folder / "libraries" / "joomla").mkdir(parents=True)
+    (joomla_site_folder / "libraries" / "joomla" / "factory.php").write_text("<?php\n")
+    (joomla_site_folder / "index.php").write_text("<?php\n")
+    init_git_repository(joomla_site_folder, DEFAULT_REMOTE)
+    drupal_site_folder = tmp_path / "drupal-7-site"
+    (drupal_site_folder / "includes").mkdir(parents=True)
+    (drupal_site_folder / "includes" / "bootstrap.inc").write_text("<?php\n")
+    (drupal_site_folder / "index.php").write_text("<?php\n")
+    init_git_repository(drupal_site_folder, DEFAULT_REMOTE)
+    joomla_facts, drupal_facts = recon(joomla_site_folder), recon(drupal_site_folder)
+    assert (joomla_facts["repo"]["app"], joomla_facts["shape"]) == ("joomla", "whole_tree")
+    assert (drupal_facts["repo"]["app"], drupal_facts["shape"]) == ("drupal", "whole_tree")
+
+
+@pytest.mark.parametrize("framework_package", ["statamic/cms", "symfony/framework-bundle"])
+def test_an_addon_or_bundle_repo_that_only_requires_the_framework_stays_quiet(tmp_path, framework_package):
+    # A Statamic addon or a Symfony bundle requires the framework too; every site of either has artisan or bin/console.
+    library_repository = tmp_path / "library"
+    (library_repository / "src").mkdir(parents=True)
+    (library_repository / "src" / "ServiceProvider.php").write_text("<?php\n")
+    (library_repository / "composer.json").write_text(json.dumps({"require": {framework_package: "^5.0"}}) + "\n")
+    init_git_repository(library_repository, DEFAULT_REMOTE)
+    assert recon(library_repository) == {"is_site": False}
 
 
 def test_the_repo_keys_are_still_exactly_six_and_docroot_guess_sits_beside_shape(tmp_path):
@@ -353,6 +395,26 @@ def test_a_standalone_wordpress_plugin_repo_stays_quiet(tmp_path):
     assert recon(plugin_repository) == {"is_site": False}
 
 
+BOILERPLATE_HEADER = "<?php\n/**\n * Plugin Name:       WordPress Plugin Boilerplate\n * Version:           1.0.0\n */\n"
+
+
+@pytest.mark.parametrize("with_root_index_php", [True, False])
+def test_the_wordpress_plugin_boilerplate_skeleton_stays_quiet(tmp_path, with_root_index_php):
+    # The Boilerplate keeps a "Silence is golden" index.php under public/, admin/ and includes/ as well as at
+    # its root: public/index.php must not make the plugin a plain PHP app.
+    plugin_repository = tmp_path / "plugin-name"
+    for inner_folder_name in ("public", "admin", "includes"):
+        (plugin_repository / inner_folder_name).mkdir(parents=True)
+        (plugin_repository / inner_folder_name / "index.php").write_text(SILENCE_IS_GOLDEN)
+    (plugin_repository / "public" / "class-plugin-name-public.php").write_text("<?php\n")
+    (plugin_repository / "plugin-name.php").write_text(BOILERPLATE_HEADER)
+    (plugin_repository / "uninstall.php").write_text("<?php\n")
+    if with_root_index_php:
+        (plugin_repository / "index.php").write_text(SILENCE_IS_GOLDEN)
+    init_git_repository(plugin_repository, DEFAULT_REMOTE)
+    assert recon(plugin_repository) == {"is_site": False}
+
+
 WORDPRESS_CORE_INDEX_PHP = "<?php\ndefine( 'WP_USE_THEMES', true );\nrequire __DIR__ . '/wp-blog-header.php';\n"
 
 
@@ -380,6 +442,24 @@ def test_a_wordpress_whose_wp_config_sits_one_folder_up_is_wordpress(tmp_path):
     init_git_repository(blog_folder, DEFAULT_REMOTE)
     facts = recon(blog_folder)
     assert (facts["repo"]["app"], facts["shape"]) == ("wordpress", "whole_tree")
+
+
+WORDPRESS_IN_A_SUBFOLDER_INDEX_PHP = "<?php\ndefine( 'WP_USE_THEMES', true );\nrequire __DIR__ . '/wp/wp-blog-header.php';\n"
+
+
+def test_a_fresh_clone_of_wordpress_in_its_own_subfolder_is_wordpress(tmp_path):
+    # johnpbloch/wordpress installs core into a gitignored wp/, and wp-config.php is gitignored too: a fresh
+    # clone holds only wp-content/ and the root index.php that loads wp/wp-blog-header.php.
+    site_repository = tmp_path / "studio-site"
+    theme_folder = site_repository / "wp-content" / "themes" / "studio"
+    theme_folder.mkdir(parents=True)
+    (theme_folder / "style.css").write_text("/*\nTheme Name: Studio\n*/\n")
+    (site_repository / "index.php").write_text(WORDPRESS_IN_A_SUBFOLDER_INDEX_PHP)
+    (site_repository / "composer.json").write_text('{"require": {"johnpbloch/wordpress": "^6.5"}}\n')
+    (site_repository / ".gitignore").write_text("/wp/\n/wp-config.php\n/vendor/\n")
+    init_git_repository(site_repository, DEFAULT_REMOTE)
+    facts = recon(site_repository)
+    assert (facts["repo"]["app"], facts["shape"], facts["docroot_guess"]) == ("wordpress", "whole_tree", "")
 
 
 def test_wp_admin_opened_on_its_own_stays_quiet(tmp_path):
