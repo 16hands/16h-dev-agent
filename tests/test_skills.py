@@ -9,8 +9,9 @@ EXPECTED = {"using-16h", "debugging-a-live-site", "reading-traffic", "pushing-to
 def frontmatter(skill_dir):
     text = (skill_dir / "SKILL.md").read_text()
     assert text.startswith("---\n"), f"{skill_dir.name}/SKILL.md does not open with a --- block"
-    block, closing_fence, _body = text[len("---\n"):].partition("\n---\n")
-    assert closing_fence, f"{skill_dir.name}/SKILL.md never closes its --- block"
+    after_opening_fence = text[len("---\n"):]
+    assert "\n---\n" in after_opening_fence, f"{skill_dir.name}/SKILL.md never closes its --- block"
+    block = after_opening_fence.split("\n---\n", 1)[0]
     fields = {}
     for line in block.splitlines():
         key, separator, value = line.partition(":")
@@ -37,6 +38,10 @@ def test_using_16h_fits_the_budget_and_carries_the_out_of_bounds_rule():
     assert "the platform's hosts are out of bounds for me" in text
     for skill in EXPECTED - {"using-16h"}:
         assert skill in text
+
+
+def test_using_16h_never_contains_the_hooks_project_block_marker():
+    assert "## This project" not in (SKILLS / "using-16h" / "SKILL.md").read_text()
 
 
 def test_no_skill_lists_the_tools_as_a_menu():
