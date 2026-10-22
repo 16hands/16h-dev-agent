@@ -14,7 +14,8 @@ The directory holding **`artisan`** — not `public/`, which is only the docroot
 | DDEV | the project root; `docroot: public` in `.ddev/config.yaml` |
 
 Unlike WordPress, the repo **is** the app here. That is why the git question
-defaults to yes.
+defaults to yes. A tree that also holds `please` and requires `statamic/cms`
+is Statamic: read `statamic.md` instead.
 
 ## Git
 
@@ -47,17 +48,37 @@ git_branch="$(git rev-parse --abbrev-ref HEAD 2>/dev/null)"
 - `uploads_size_bytes` has no Laravel meaning: pass `null`. Public user media
   under `storage/app/public` travels once, inside `storage/` on the first
   push; after that the platform keeps its own copy. Say so if the app has any.
-- `db_size_bytes`: only if you can get it cheaply, e.g.
-  `php artisan db:show --json` (Laravel 10+) or a
-  `SELECT SUM(data_length+index_length)` against `information_schema.TABLES`.
-  Otherwise `null` — a `null` makes the plan ask; a wrong number does not.
+- `db_size_bytes`: `null`. The plan asks nothing about the database here.
+- `docroot_guess`: `public`, from the project block.
+
+## .env.16h
+
+The platform owns the app's `.env`. `.env.16h` at the app root holds the keys
+only this app knows — a Stripe key, a third-party API URL — and travels as its
+own part, `env`, never in the zip. It is optional: the platform's keys alone
+boot a fresh app. On first use, create it from `.env.example` without the keys
+the platform writes (and ignores in the part, naming each in the push report),
+and keep it out of git:
+
+```bash
+platform_keys='APP_NAME|APP_ENV|APP_KEY|APP_DEBUG|APP_URL|LOG_CHANNEL|LOG_LEVEL|DB_CONNECTION|DB_HOST|DB_PORT|DB_DATABASE|DB_USERNAME|DB_PASSWORD|SESSION_DRIVER|CACHE_STORE|QUEUE_CONNECTION|FILESYSTEM_DISK|BROADCAST_CONNECTION|MAIL_MAILER|MAIL_HOST|MAIL_PORT|MAIL_USERNAME|MAIL_PASSWORD|MAIL_ENCRYPTION|MAIL_FROM_ADDRESS|MAIL_FROM_NAME'
+test -f .env.16h || grep -Ev "^(export[[:space:]]+)?(${platform_keys})=" .env.example > .env.16h
+grep -qxF '.env.16h' .gitignore 2>/dev/null || printf '\n.env.16h\n' >> .gitignore
+```
+
+Show the file and ask which values the devsite needs; the developer's answers
+go in this file and nowhere else. Copy it into the parts folder on **every**
+push: the platform rewrites `.env` each time, so a push without it drops its keys.
 
 ## `.deployignore`
 
 ```
 node_modules/*
 storage/logs/*.log
+bootstrap/cache/*.php
 .env
+.env.16h
+.env.*
 .git/*
 docs/16h/*
 *.sql
@@ -69,7 +90,10 @@ docs/16h/*
 |---|---|
 | `node_modules/*` | build input only |
 | `storage/logs/*.log` | local logs: weight, and whatever the app wrote to them. The folder itself travels |
-| `.env` | **never travels.** The platform writes the app's environment from the database row and the client's secrets |
+| `bootstrap/cache/*.php` | a `config:cache` file is the local `.env` frozen into PHP, and it would win over the platform's. Laravel rebuilds the manifests; the folder itself travels |
+| `.env` | never travels in the zip. The platform writes `.env` on every push from the site row, the app key it keeps for the site, the database it made, and the mail catcher; keys only this app knows go in `.env.16h` (above) |
+| `.env.16h` | travels as the `env` part, never inside the release |
+| `.env.*` | `.env.local`, `.env.testing`: one machine's values. `.env.example` goes too; its keys reach the site through `.env.16h`, which starts as a copy of it |
 | `.git/*` | history is not a deploy artifact, and `.git/config` can hold a token |
 | `docs/16h/*` | the release notes and investigations are the developer's records, not the app's |
 | `*.sql`, `*.sql.gz`, `*.zip` | a dump or an archive left in the tree must never ship with the code |
@@ -99,29 +123,24 @@ a part left in the app root rides in the next `code.zip`.
 npm run build                                # if the app has a front-end build
 parts_folder="$(mktemp -d)"; echo "$parts_folder"
 zip -r -q "$parts_folder/code.zip" . -x@.deployignore
+if [ -f .env.16h ]; then cp .env.16h "$parts_folder/env.16h"; fi
 ```
 
-The `database` part is `database.sql.gz` as for WordPress — a gzipped mysqldump
-of the local schema, into the same folder:
-
-```bash
-mysqldump --single-transaction "$local_database_name" | gzip > "$parts_folder/database.sql.gz"
-```
-
-Only build it if `include_database` was answered yes, and remember the lane's
-URL rewrite is WordPress's `wp search-replace`. **Laravel rows are not
-rewritten** — anything holding an absolute local URL (seeded content, a CMS
-package's tables) arrives pointing at the local host. Say this before the
-person answers `rewrite_urls`, and fix it in the app's own data afterwards.
+`parts` is `["code"]`, plus `"env"` when `env.16h` was built and uploaded.
+There is no `database` part: a database import is WordPress-only in this wave.
+The devsite's database starts empty and `migrate --force` builds the schema;
+no seeder runs, so seed data the site needs arrives through a migration.
 
 ## After `applied`
 
 - No `wp_admin_login_url` — that is WordPress-only. `site_status` returns the
   URL and, when the deploy failed, the lane's own message.
-- Migrations are not run by the import. If the app needs them, say so; that is
-  a job for the panel or the client's own deploy script today.
+- The platform runs `migrate --force` and `storage:link` inside the release before the flip; a failing migration stops the push and the report carries its output.
+- Mail never reaches a real inbox: the platform points it at its mail
+  catcher (or at the log, until the catcher is live).
 - Later changes: the *later* path in `SKILL.md` — `site_plan` with
-  `site_key`, rebuild `code.zip` in a fresh parts folder, and
-  `site_push(parts=["code"], answers)`; or,
+  `site_key`, rebuild `code.zip` and `env.16h` in a fresh parts folder, and
+  `site_push(parts, answers)` with `parts` as above; or,
   if the dev said yes to `git_pull`, let the pull lane serve it.
-- Going live is the `releasing-to-production` skill.
+- Rolling back a devsite is pushing the previous code again.
+- Production pushes are WordPress-only in this wave.

@@ -751,6 +751,17 @@ def test_the_output_is_under_budget(tmp_path):
     assert len(injected_context(tmp_path)) < 8000
 
 
+def test_the_project_block_carries_the_docroot_guess_only_when_recon_has_one(tmp_path):
+    # The pushing skill copies docroot_guess into local_facts from this block; recon's JSON never reaches it.
+    make_laravel(tmp_path / "laravel-site")
+    make_wordpress(tmp_path / "wordpress-site")
+    laravel_context = injected_context(tmp_path / "laravel-site")
+    wordpress_context = injected_context(tmp_path / "wordpress-site")
+    assert "docroot_guess: public" in laravel_context.split("## This project", 1)[1]
+    assert "docroot_guess" not in wordpress_context.split("## This project", 1)[1]
+    assert len(laravel_context) < 8000
+
+
 def test_without_a_plugin_root_variable_the_sdk_shape_is_used(tmp_path):
     make_wordpress(tmp_path)
     output = run_hook(tmp_path, environment=hook_environment(with_claude_plugin_root=False))

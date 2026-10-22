@@ -71,10 +71,15 @@ try:
         working_tree = "dirty" if facts.get("dirty") else "clean"
         shape = facts.get("shape") or "unknown"
         local_php = facts.get("php") or "unknown"
+        # The pushing skill copies this line into local_facts: the plan
+        # defaults the docroot question of a plain PHP app from it.
+        docroot_guess = facts.get("docroot_guess")
+        docroot_line = f"docroot_guess: {docroot_guess}\n" if docroot_guess in (".", "public", "web") else ""
         print(
             "## This project\n\n"
             "```json\n" + repo_json + "\n```\n\n"
-            f"Working tree: {working_tree}. Shape: {shape}. Local PHP: {local_php}.\n\n"
+            f"Working tree: {working_tree}. Shape: {shape}. Local PHP: {local_php}.\n"
+            + docroot_line + "\n"
             "Your first tool call on any 16h task is site_status with this repo block as its repo argument. "
             "Name the project and its situation back to the developer before doing anything else.",
             end="",

@@ -7,6 +7,8 @@ description: Use when the developer says the change should go live — "deploy t
 
 A production push replaces what the client's customers are using. The gate: **no production push until the developer has heard every line of `what_will_change` and said yes to it.**
 
+Production pushes are WordPress-only in this wave. For any other app `site_plan(type=production)` refuses and names the adoption step; read that sentence to the developer and stop.
+
 ```
 site_status(production) → site_plan(type=production) → read what_will_change → include_database → their yes → upload → site_push(confirm, digest) → verifying-a-deploy → release note
 ```
