@@ -136,9 +136,11 @@ def test_each_framework_reference_keeps_every_env_file_out_of_the_zip(reference)
     assert "## .env.16h" in (PUSHING_REFERENCES / reference).read_text()
 
 
-def test_symfony_keeps_env_prod_out_of_the_zip():
-    # Symfony loads .env.prod after .env, so in the release it would override the platform's block.
-    assert ".env.prod" in deployignore_patterns(PUSHING_REFERENCES / "symfony.md")
+def test_symfony_keeps_env_prod_and_the_compiled_env_out_of_the_zip():
+    # Symfony loads .env.prod after .env, so in the release it would override the platform's block;
+    # composer dump-env's .env.local.php replaces every .env read, the platform's included.
+    patterns = deployignore_patterns(PUSHING_REFERENCES / "symfony.md")
+    assert ".env.prod" in patterns and ".env.local.php" in patterns
 
 
 def test_laravel_no_longer_claims_the_platform_writes_env_from_secrets():

@@ -104,7 +104,7 @@ Write `.deployignore` in the site root if it is absent; if it is there, add each
 
 - WordPress: `wp-content/uploads/*`, `wp-content/cache/*`, `wp-content/upgrade/*`, `node_modules/*`, `.git/*`, `.env`, `wp-config.php`, `docs/16h/*`, `*.sql`, `*.sql.gz`, `*.zip`
 - Laravel and Statamic: `node_modules/*`, `storage/logs/*.log`, `bootstrap/cache/*.php`, `.env`, `.env.16h`, `.env.local`, `.env.*.local`, `.git/*`, `docs/16h/*`, `*.sql`, `*.sql.gz`, `*.zip` — `vendor/` and `storage/` travel (and Statamic's `content/` and `users/`), for the reasons in its reference
-- Symfony: `node_modules/*`, `var/cache/*`, `var/log/*`, `.env`, `.env.16h`, `.env.local`, `.env.*.local`, `.env.prod`, `.git/*`, `docs/16h/*`, `*.sql`, `*.sql.gz`, `*.zip` — `vendor/` travels
+- Symfony: `node_modules/*`, `var/cache/*`, `var/log/*`, `.env`, `.env.16h`, `.env.local`, `.env.*.local`, `.env.prod`, `.env.local.php`, `.git/*`, `docs/16h/*`, `*.sql`, `*.sql.gz`, `*.zip` — `vendor/` travels
 - phpapp: `node_modules/*`, `.env`, `.env.16h`, `.git/*`, `docs/16h/*`, `*.sql`, `*.sql.gz`, `*.zip`
 - files: `.git/*`, `docs/16h/*`, `*.sql`, `*.sql.gz`, `*.zip` — the zip is the chosen folder's contents
 

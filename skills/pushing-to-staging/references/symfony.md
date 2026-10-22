@@ -66,6 +66,7 @@ var/log/*
 .env.local
 .env.*.local
 .env.prod
+.env.local.php
 .git/*
 docs/16h/*
 *.sql
@@ -82,13 +83,13 @@ docs/16h/*
 | `.env.16h` | rides in the env part, never inside the release |
 | `.env.local`, `.env.*.local` | one machine's values |
 | `.env.prod` | Symfony loads it after `.env`, so in the release it would override the platform's keys; it never ships. `.env.test` and its kind may travel: `APP_ENV=prod` never loads them |
+| `.env.local.php` | `composer dump-env`'s compiled file: Symfony reads it instead of every `.env`, the platform's included |
 | `.git/*` | history is not a deploy artifact, and `.git/config` can hold a token |
 | `docs/16h/*` | the developer's records, not the app's |
 | `*.sql`, `*.sql.gz`, `*.zip` | a dump or an archive left in the tree must never ship with the code |
 
 Write every folder as `dir/*`: `dir/` leaves out only the folder's own entry.
-Delete a `.env.local.php` left by `composer dump-env` before zipping: Symfony
-reads it instead of every `.env` file. **`vendor/` travels on purpose** — the lane runs no `composer install`; run it
+**`vendor/` travels on purpose** — the lane runs no `composer install`; run it
 first if `vendor/` is missing, and take out any `vendor/` line.
 
 ## Building the parts
