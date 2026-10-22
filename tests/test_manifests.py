@@ -58,7 +58,7 @@ def test_the_codex_manifest_declares_hooks_and_its_interface():
 def test_the_codex_manifest_carries_the_claude_manifests_identity():
     claude_manifest = read_json(".claude-plugin/plugin.json")
     codex_manifest = read_json(".codex-plugin/plugin.json")
-    for shared_key in ("description", "author", "homepage", "repository", "keywords"):
+    for shared_key in ("description", "author", "homepage", "repository", "license", "keywords"):
         assert codex_manifest[shared_key] == claude_manifest[shared_key], shared_key
 
 
@@ -73,3 +73,10 @@ def test_the_native_marketplace_entry_names_the_plugin_at_the_repo_root():
         "policy": {"installation": "AVAILABLE", "authentication": "ON_INSTALL"},
         "category": "Developer Tools",
     }
+
+
+def test_the_plugin_is_mit_licensed_in_the_file_and_both_manifests():
+    licence_text = (PLUGIN_ROOT / "LICENSE").read_text()
+    assert licence_text.startswith("MIT License\n\nCopyright (c) 2026 16hands\n")
+    assert read_json(".claude-plugin/plugin.json")["license"] == "MIT"
+    assert read_json(".codex-plugin/plugin.json")["license"] == "MIT"
