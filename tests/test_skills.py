@@ -235,7 +235,8 @@ PINNED_DEPLOYIGNORE = {
                     ".env", ".env.16h", ".env.*", "auth.json", ".git/*", "docs/16h/*", "*.sql", "*.sql.gz", "*.zip"],
     "symfony.md": ["node_modules/*", "var/cache/*", "var/log/*", ".env", ".env.16h", ".env.*", ".env.local.php",
                    "auth.json", ".git/*", "docs/16h/*", "*.sql", "*.sql.gz", "*.zip"],
-    "phpapp.md": ["node_modules/*", ".env", ".env.16h", ".git/*", "docs/16h/*", "*.sql", "*.sql.gz", "*.zip"],
+    "phpapp.md": ["node_modules/*", ".env", ".env.16h", ".env.*", "auth.json", ".git/*", "docs/16h/*", "*.sql", "*.sql.gz",
+                  "*.zip"],
     "files.md": [".git/*", "docs/16h/*", "*.sql", "*.sql.gz", "*.zip"],
 }
 

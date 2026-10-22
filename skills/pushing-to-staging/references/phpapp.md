@@ -61,6 +61,8 @@ code_size_bytes=$(( $(du -sk . | cut -f1) * 1024 ))
 node_modules/*
 .env
 .env.16h
+.env.*
+auth.json
 .git/*
 docs/16h/*
 *.sql
@@ -72,6 +74,8 @@ docs/16h/*
 |---|---|
 | `node_modules/*` | build input only |
 | `.env`, `.env.16h` | local values; the platform reads neither for a plain PHP app |
+| `.env.*` | every other env file (`.env.production`, `.env.backup`, `.env.local`): under a `.` docroot they would be served to anyone. The platform reads no `.env.example` for a plain PHP app, so nothing is added back |
+| `auth.json` | composer's tokens for private packages: under a `.` docroot they would be served to anyone |
 | `.git/*` | history is not a deploy artifact, and `.git/config` can hold a token |
 | `docs/16h/*` | the developer's records; under a `.` docroot they would be served |
 | `*.sql`, `*.sql.gz`, `*.zip` | a dump or an archive left in the tree is one anyone can download |
