@@ -17,9 +17,11 @@ A push is done when `site_status` says `applied` and the site answers, not when 
 | `requested` | the site is being created | wait |
 | `accepted` | site and database exist | upload, then `site_push` |
 | `refused` | creation was refused | read `message`; re-plan or stop |
-| `pushing` | the deploy lane is running | keep polling |
+| `pushing` | the deploy lane is running | keep polling; when `message` changes, show it in one line |
 | `applied` | live on `url` | step 2 |
 | `failed` | the lane stopped; the previous release still serves | read `message` verbatim; fix; push again |
+
+While `pushing`, the server reports its phases (unpacking, scanning, migrations, switching) in `message`: show each new one to the developer once, in the server's own words, and say nothing when it has not changed. The scan of a big `vendor/` takes about a minute, so a long "Scanning" line is the server working, not stuck.
 
 `wp_admin_login_url` comes after a WordPress push has `applied`, only to the identity that pushed, and it is one-shot: hand it over, do not open it yourself, and do not repeat it later. While `message` says the login is being minted, ask again in about twenty seconds.
 
