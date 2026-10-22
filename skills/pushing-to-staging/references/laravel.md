@@ -19,11 +19,11 @@ is Statamic: read `statamic.md` instead.
 
 ## Git
 
-| Shape | Offer |
+| Shape | Whether the plan asks |
 |---|---|
-| `.git` with an `origin` | `git_pull` question, **default yes** — Laravel deploys are a code pull, the way everyone already runs them |
-| `.git`, no `origin` (`no_remote`) | say nothing about git; upload only |
-| no `.git` | say nothing about git; upload only |
+| `.git` with an `origin` | asks `git_pull`, **default yes** — Laravel deploys are a code pull, the way everyone already runs them |
+| `.git`, no `origin` (`no_remote`) | never asks: upload only, and say nothing about git |
+| no `.git` | never asks: upload only, and say nothing about git |
 
 Answering yes to `git_pull` puts `git_repo_url` and the branch on the site row
 and returns the public half of the client's deploy key for you to add to the

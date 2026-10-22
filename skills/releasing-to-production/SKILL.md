@@ -23,9 +23,7 @@ The site is the `production` that `site_status` named, or the one the developer 
 
 ## 2. Plan
 
-A Laravel push runs no migrations. If the change adds one, say so and stop: running it is a job for the panel or 16Hands.
-
-`site_plan(client?, type: "production", site_key, app, local_facts)`, with `local_facts` collected as `pushing-to-staging` step 3 does. It returns `plan_id`, `what_will_change`, `questions`, `defaults`, `refusals`, `digest` and `uploads`: presigned POSTs for `code` on Laravel, and for `code`, `database` and `uploads` on WordPress. A plan lives 30 minutes.
+`site_plan(client?, type: "production", site_key, app, local_facts)`, with `local_facts` collected as `pushing-to-staging` step 3 does. It returns `plan_id`, `what_will_change`, `questions`, `defaults`, `refusals`, `digest` and `uploads`: presigned POSTs for `code`, `database` and `uploads`. A plan lives 30 minutes.
 
 A refusal here names the gate, and the push stops until someone else moves it:
 
@@ -43,7 +41,7 @@ Every line of `what_will_change`, in words:
 
 Then the plan's questions, in order:
 
-- **`include_database`** (WordPress only), default **no**. Read its text, and say what yes means on a live site: every order, customer and form entry made since your local copy was taken is replaced by that copy; the current database is kept as a restore point. A yes adds `database` to `parts` and makes `database_replaced` true — say both back.
+- **`include_database`**, default **no**. Read its text, and say what yes means on a live site: every order, customer and form entry made since your local copy was taken is replaced by that copy; the current database is kept as a restore point. A yes adds `database` to `parts` and makes `database_replaced` true — say both back.
 - **`confirm`**, default no. Only the developer's own yes to what you just read answers it.
 
 **`uploads`** (WordPress) goes in `parts` only when the developer says so — the plan asks no question about it: a first push to a production site never pushed to needs it, and the lane adds to the shared uploads folder without deleting anything.
@@ -52,7 +50,7 @@ Then the plan's questions, in order:
 
 Build the parts in a fresh folder outside the site root, upload each to its POST in the plan's `uploads`, then delete the folder, as `pushing-to-staging` steps 5 and 6 do. Never build them in the site root: this `code.zip` or the next would carry the dump, and production would serve it. Check `.deployignore` carries `docs/16h/*` before zipping — the release notes live there. A part named in `parts` that never reached its POST is refused: `part X has not been uploaded — POST it to the URL from site_plan first`.
 
-`site_push(site_key, plan_id, parts, confirm: true, digest, include_database)`, with `digest` exactly as the plan returned it, and `include_database` only when the plan asked it — on a Laravel plan it is refused as a question the plan never asked. It returns a `task_id`; then `verifying-a-deploy`, five-minute look included.
+`site_push(site_key, plan_id, parts, confirm: true, digest, include_database)`, with `digest` exactly as the plan returned it, and `include_database` only when the plan asked it. It returns a `task_id`; then `verifying-a-deploy`, five-minute look included.
 
 Refused at push time:
 

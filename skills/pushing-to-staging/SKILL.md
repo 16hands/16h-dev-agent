@@ -56,17 +56,17 @@ The rules for every 16h call are in `using-16h`. Two more hold for a push:
 
 The upload takes this folder, not the repo. Say which one you picked.
 
-**When two layouts fit**, ask one question, with the plan's default first — the `docroot` the plan offers, or for a static site the first of `dist`, `build`, `public`, `.` that holds an `index.html` — never a menu of everything you found. When the hook's `app` and what you see disagree (a WordPress tree inside a Laravel `public/`, say), say what the hook found and what you see, and ask which one the site is before `site_plan`: the app a site is created as is the app of every later push.
+**When two layouts fit**, ask one question, the default first, never a menu of everything you found: a plain PHP app's docroot as `phpapp.md`'s *The docroot question* says, a static site's folder as `files.md` says. When the hook's `app` disagrees with what you see (a WordPress tree inside a Laravel `public/`) or with what the developer tells you (they call it Statamic, the hook said laravel), say what the hook found and ask which one the site is before `site_plan`: the app a site is created as is the app of every later push.
 
 ## Step 2 — classify the git state of that folder
 
 `git rev-parse --show-toplevel`, `git remote get-url origin`. Whether to offer git is the plan's rule, not yours: ask `git_pull` only when the plan returns it. For laravel, statamic and symfony it comes whenever the repo has an `origin`, default yes — the repo is the app. For WordPress it comes only on the shapes the table marks pull-deployable, default no:
 
-| Shape (`git.shape`) | Spot it by | Pull-deployable | What you may offer |
+| Shape (`git.shape`) | Spot it by | Pull-deployable | Whether the plan asks |
 |---|---|---|---|
-| `whole_tree` | `wp-config.php` + `wp-content/` + `.git` at the root | yes | git question, default no |
-| `bedrock` | `composer.json` requires `roots/wordpress`, `web/app/` exists | yes, once builds land | git question — say the build step is wave 2 |
-| `wp_content_only` / `theme_only` | `themes/` + `plugins/`, or a `Theme Name:` `style.css`, with no `wp-config.php` above | no | **do not mention git** — upload only |
+| `whole_tree` | `wp-config.php` + `wp-content/` + `.git` at the root | yes | asks `git_pull`, default no |
+| `bedrock` | `composer.json` requires `roots/wordpress`, `web/app/` exists | yes, once builds land | asks `git_pull`, default no, noting the build step is wave 2 — say so |
+| `wp_content_only` / `theme_only` | `themes/` + `plugins/`, or a `Theme Name:` `style.css`, with no `wp-config.php` above | no | never asks: upload only, and say nothing about git |
 
 Git is never required and the first push is always an upload; with no `.git` (`none`) or no `origin` (`no_remote`), say nothing about git at all.
 
@@ -83,7 +83,7 @@ uploads_size_bytes=$(( $(du -sk wp-content/uploads | cut -f1) * 1024 ))
 code_size_bytes=$(( $(du -sk . | cut -f1) * 1024 ))
 ```
 
-Keys, exactly: `folder_name`, `siteurl`, `php`, `db_size_bytes`, `uploads_size_bytes`, `code_size_bytes`, `git` = {`present`, `remote_url`, `branch`, `shape`}, `docroot_guess` (copied from the project block's `docroot_guess` line; `null` when it has none); what you could not measure goes as `null`, never a guess. Then `site_plan(client?, app, local_facts)`, `app` = `wordpress`|`laravel`|`statamic`|`symfony`|`phpapp`|`files` — the hook's `app`, or `files` for a static site the developer asked for. For `drupal` or `joomla`, plan once with that `app`, read the refusal to the developer, and stop.
+Keys, exactly: `folder_name`, `siteurl`, `php`, `db_size_bytes`, `uploads_size_bytes`, `code_size_bytes`, `git` = {`present`, `remote_url`, `branch`, `shape`}, `docroot_guess` (copied from the project block's `docroot_guess` line; leave it out of `local_facts` when the block has no such line); what you could not measure goes as `null`, never a guess. Then `site_plan(client?, app, local_facts)`, `app` = `wordpress`|`laravel`|`statamic`|`symfony`|`phpapp`|`files` — the hook's `app`, or `files` for a static site the developer asked for. For `drupal` or `joomla`, plan once with that `app`, read the refusal to the developer, and stop.
 
 The name comes from `folder_name`. A taken one is refused with two others — `name X.devsite.co.nz is taken — try X2.devsite.co.nz or X-<client>.devsite.co.nz`. If the taken name is one of `site_status`'s `devsites`, or the project itself with `type: dev`, it is the developer's own site: take the *later* path with that `site_key`, never a second devsite. Only otherwise offer the two names, the first as the default, ask once, and plan again with `folder_name` set to the label they chose (`X2`). `site_key` on `site_plan` means a site that already exists, so it cannot pick a new name.
 
@@ -108,7 +108,7 @@ Write `.deployignore` in the site root if it is absent; if it is there, add each
 - phpapp: `node_modules/*`, `.env`, `.env.16h`, `.git/*`, `docs/16h/*`, `*.sql`, `*.sql.gz`, `*.zip`
 - files: `.git/*`, `docs/16h/*`, `*.sql`, `*.sql.gz`, `*.zip` — the zip is the chosen folder's contents
 
-Write a folder as `dir/*`: zip matches each pattern against file paths, so `dir/` leaves out only the folder's own entry and every file in it still goes in. `wp-config.php`, `.env` and a machine's `.env.local` are excluded on purpose — the platform writes its own, and a framework app's own keys travel as the env part, built from `.env.16h` as its reference says. `.env.example` travels: the platform reads it to show which keys are still blank. The site serves whatever `code.zip` carries, so `docs/16h/*`, dumps and archives stay out: a dump in the tree is a dump anyone can download.
+Write a folder as `dir/*`: zip matches each pattern against file paths, so `dir/` leaves out only the folder's own entry and every file in it still goes in. `wp-config.php`, `.env` and a machine's `.env.local` are excluded on purpose — for WordPress and the framework apps the platform writes its own, and a framework app's own keys travel as the env part, built from `.env.16h` as its reference says; a plain PHP app gets no config from the platform at all. `.env.example` travels: the platform reads it to show which keys are still blank. The site serves whatever `code.zip` carries, so `docs/16h/*`, dumps and archives stay out: a dump in the tree is a dump anyone can download.
 
 Build only the parts answered yes (WordPress below; every other app as its reference's *Building the parts* says), in a fresh folder outside the site root — a part built in the site root rides in the next `code.zip`, and production serves it. Print the folder's path and use it in step 6, since the next command may run in a new shell:
 

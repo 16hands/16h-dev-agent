@@ -46,7 +46,7 @@ code_size_bytes=$(( $(du -sk . | cut -f1) * 1024 ))
 - `siteurl`: the URL you open locally, or `null`. Nothing is rewritten.
 - `db_size_bytes` and `uploads_size_bytes`: `null`.
 - `docroot_guess`: copied from the project block (`.`, `public` or `web`);
-  `null` when the block has none.
+  leave it out of `local_facts` when the block has no `docroot_guess` line.
 
 ## `.deployignore`
 

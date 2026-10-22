@@ -24,13 +24,17 @@ From the repo root:
 site_folder="dist"                           # the answer to the folder question
 folder_name="$(basename "$PWD")"             # the repo's name, never the build folder's
 code_size_bytes=$(( $(du -sk "$site_folder" | cut -f1) * 1024 ))
+git_present="$(git rev-parse --is-inside-work-tree 2>/dev/null || echo false)"
+git_remote_url="$(git remote get-url origin 2>/dev/null)"
+git_branch="$(git rev-parse --abbrev-ref HEAD 2>/dev/null)"
 ```
 
 - `folder_name` names the devsite, so it comes from the repo: a site named
   `dist.devsite.co.nz` names nothing.
 - `git`: `present`, `remote_url` and `branch` as measured, `shape: null` — the
   build folder is not the repo, so there is nothing to pull.
-- Every other key is `null`, `docroot_guess` included: the zip is the docroot.
+- Leave `docroot_guess` out of `local_facts`: the zip is the docroot.
+- Every other key is `null`.
 - `site_plan(app: "files", local_facts)`.
 
 ## `.deployignore`
@@ -58,10 +62,14 @@ should not serve.
 ## Building the parts
 
 Build outside the repo, print the folder's path for the upload, and delete it
-once the part has answered `204` (`rm -rf "$parts_folder"`):
+once the part has answered `204` (`rm -rf "$parts_folder"`). Set `site_folder`
+again here: the next command may run in a new shell, and an empty one would
+zip the repo root, whose source `index.html` the platform cannot tell apart:
 
 ```bash
 npm run build                                # if the site has a build
+site_folder="dist"                           # the answer to the folder question
+[ -n "$site_folder" ] && [ -f "$site_folder/index.html" ] || { echo "site_folder must name the built folder holding index.html"; exit 1; }
 repo_folder="$PWD"
 parts_folder="$(mktemp -d)"; echo "$parts_folder"
 (cd "$site_folder" && zip -r -q "$parts_folder/code.zip" . -x@"$repo_folder/.deployignore")

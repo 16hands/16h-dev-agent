@@ -103,6 +103,7 @@ it once every part has answered `204` (`rm -rf "$parts_folder"`):
 ```bash
 parts_folder="$(mktemp -d)"; echo "$parts_folder"
 zip -r -q "$parts_folder/code.zip" . -x@.deployignore
+[ -z "$(tail -c1 .env)" ] || echo "add a newline at the end of .env first"
 if [ -f .env.16h ]; then
   cat .env .env.16h > "$parts_folder/env.16h"
 else

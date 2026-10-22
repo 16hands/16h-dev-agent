@@ -1,3 +1,4 @@
+import re
 from pathlib import Path
 
 import pytest
@@ -61,7 +62,8 @@ def test_pushing_to_staging_opens_with_the_target_and_keeps_the_recipes():
 def test_releasing_writes_the_release_note_and_verifying_owns_the_http_rule():
     releasing = (SKILLS / "releasing-to-production" / "SKILL.md").read_text()
     assert "docs/16h/releases/" in releasing and "what_will_change" in releasing
-    assert releasing.index("A Laravel push runs no migrations") < releasing.index("`site_plan(client?")
+    assert releasing.index("WordPress-only in this wave") < releasing.index("`site_plan(client?")
+    assert "Laravel" not in releasing
     assert (SKILLS / "releasing-to-production" / "references" / "release-note.md").exists()
     verifying = (SKILLS / "verifying-a-deploy" / "SKILL.md").read_text()
     assert "blocked_at_waf" in verifying and "Mozilla/5.0 (Macintosh" in verifying
@@ -157,6 +159,7 @@ def test_symfony_ships_its_committed_env_inside_the_env_part():
 def test_files_zips_the_chosen_folders_contents_and_asks_no_php():
     text = (PUSHING_REFERENCES / "files.md").read_text()
     assert "dist" in text and "build" in text and "index.html" in text and "php" not in text.lower().split("## building")[0]
+    assert '(cd "$site_folder" && zip -r -q "$parts_folder/code.zip" . -x@' in text
 
 
 def test_pushing_to_staging_names_every_app_the_hook_can_emit_and_the_env_part():
@@ -168,3 +171,48 @@ def test_pushing_to_staging_names_every_app_the_hook_can_emit_and_the_env_part()
 
 def test_releasing_says_production_is_wordpress_only():
     assert "WordPress-only in this wave" in (SKILLS / "releasing-to-production" / "SKILL.md").read_text()
+
+
+PINNED_DEPLOYIGNORE = {
+    "laravel.md": ["node_modules/*", "storage/logs/*.log", "bootstrap/cache/*.php", ".env", ".env.16h", ".env.local",
+                   ".env.*.local", ".git/*", "docs/16h/*", "*.sql", "*.sql.gz", "*.zip"],
+    "statamic.md": ["node_modules/*", "storage/logs/*.log", "bootstrap/cache/*.php", ".env", ".env.16h", ".env.local",
+                    ".env.*.local", ".git/*", "docs/16h/*", "*.sql", "*.sql.gz", "*.zip"],
+    "symfony.md": ["node_modules/*", "var/cache/*", "var/log/*", ".env", ".env.16h", ".env.local", ".env.*.local",
+                   ".env.prod", ".env.local.php", ".git/*", "docs/16h/*", "*.sql", "*.sql.gz", "*.zip"],
+    "phpapp.md": ["node_modules/*", ".env", ".env.16h", ".git/*", "docs/16h/*", "*.sql", "*.sql.gz", "*.zip"],
+    "files.md": [".git/*", "docs/16h/*", "*.sql", "*.sql.gz", "*.zip"],
+}
+
+
+@pytest.mark.parametrize("reference", sorted(PINNED_DEPLOYIGNORE))
+def test_each_deployignore_is_exactly_its_pinned_list(reference):
+    assert deployignore_patterns(PUSHING_REFERENCES / reference) == PINNED_DEPLOYIGNORE[reference]
+
+
+def passages_naming(text, word):
+    """The paragraphs and bullets of a markdown text that name `word`."""
+    return [passage for passage in re.split(r"\n\s*\n|\n- ", text) if word in passage]
+
+
+def test_docroot_guess_is_left_out_of_local_facts_never_sent_as_null():
+    # site_plan's schema is {"type": "string", "enum": [".", "public", "web"]}: a client that validates
+    # arguments against it refuses a null, so the key is left out when the project block has none.
+    body = (SKILLS / "pushing-to-staging" / "SKILL.md").read_text()
+    step_3 = body.split("## Step 3", 1)[1].split("## Step 4", 1)[0]
+    docroot_clause = step_3.split("`docroot_guess`", 1)[1].split(")", 1)[0]
+    assert "null" not in docroot_clause and "leave it out" in docroot_clause
+    for reference in REFERENCES:
+        for passage in passages_naming((PUSHING_REFERENCES / reference).read_text(), "docroot_guess"):
+            assert "null" not in passage, (reference, passage)
+
+
+def test_files_build_block_names_its_folder_and_checks_index_html_before_zipping():
+    # The agent's shell keeps nothing between calls: an empty site_folder zips the repo root, whose
+    # source index.html passes the platform's marker check and serves the source tree.
+    building = (PUSHING_REFERENCES / "files.md").read_text().split("## Building the parts", 1)[1]
+    build_block = building.split("```bash", 1)[1].split("```", 1)[0]
+    sets_folder = build_block.index('site_folder="')
+    checks_index_html = build_block.index('[ -f "$site_folder/index.html" ]')
+    zips = build_block.index('(cd "$site_folder" && zip')
+    assert sets_folder < checks_index_html < zips
