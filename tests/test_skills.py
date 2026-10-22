@@ -48,3 +48,30 @@ def test_no_skill_lists_the_tools_as_a_menu():
     for skill in EXPECTED:
         body = (SKILLS / skill / "SKILL.md").read_text()
         assert "| `logs_read` |" not in body and "## Tools" not in body
+
+
+def test_pushing_to_staging_opens_with_the_target_and_keeps_the_recipes():
+    body = (SKILLS / "pushing-to-staging" / "SKILL.md").read_text()
+    assert "before_production" in body.split("## Doctrine")[0]
+    assert (SKILLS / "pushing-to-staging" / "references" / "wordpress.md").exists()
+    assert "curl -sS -L -A" not in body
+
+
+def test_releasing_writes_the_release_note_and_verifying_owns_the_http_rule():
+    releasing = (SKILLS / "releasing-to-production" / "SKILL.md").read_text()
+    assert "docs/16h/releases/" in releasing and "what_will_change" in releasing
+    assert (SKILLS / "releasing-to-production" / "references" / "release-note.md").exists()
+    verifying = (SKILLS / "verifying-a-deploy" / "SKILL.md").read_text()
+    assert "blocked_at_waf" in verifying and "Mozilla/5.0 (Macintosh" in verifying
+
+
+def test_debugging_names_the_gate_and_the_investigation_note():
+    body = (SKILLS / "debugging-a-live-site" / "SKILL.md").read_text()
+    assert "no code change until the error is named" in body.lower()
+    assert "docs/16h/investigations/" in body
+    triage = (SKILLS / "debugging-a-live-site" / "references" / "triage.md").read_text()
+    assert "not available yet" not in triage
+
+
+def test_the_old_skills_are_gone():
+    assert not (SKILLS / "16h-dev-agent").exists() and not (SKILLS / "devsite-import").exists()

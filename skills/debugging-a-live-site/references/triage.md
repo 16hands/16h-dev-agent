@@ -34,17 +34,25 @@ one exception ten thousand times and ten exceptions once are different
 problems. The same error on every node is code or data; on one node it is that
 machine, and that is a 16Hands job, not a code change.
 
-## 3. The access log — not available yet, so say so
+## 3. Read the kind the report is about
+
+`errors` is the application's own voice. When the report is about requests,
+mail or a scheduled job, read the kind that records it instead of inferring
+traffic or mail from a stack trace:
+
+- `access` — the lake's nginx rows: which URL, which status, how long, which
+  node. "The site is slow", "it's 502ing", "what happened at 2pm".
+- `mail` — the delivery outcome of the client's email: "our emails are
+  bouncing".
+- `cron` — the client's recent scheduled runs, with exit codes and output:
+  "the nightly import didn't run".
 
 ```
 logs_read(client: "<client key>", kind: "access", minutes: <window>)
 ```
 
-refuses today: the only implemented kind is `errors`. `access` (which URL,
-which status, how often), `mail` (a bounce) and `cron` are named by the tool
-and will land later. So "the site is slow" and "our emails are bouncing" can
-only be answered as far as the application's own errors go — say that plainly
-instead of inferring traffic or mail from a stack trace.
+The `reading-traffic` skill says which kind answers which question and how to
+read each one.
 
 ## 4. Form ONE hypothesis and say it out loud
 
@@ -57,17 +65,13 @@ do not fix the most likely-looking thing.
 Work in the repo, run the tests, confirm the fix addresses the error in the
 log rather than something adjacent.
 
-## 6. Push the fix to a devsite, never to their live site
+## 6. Push the fix to staging, never straight to their live site
 
-`site_push` deploys to a **dev** site. If the client's site is production,
-make a devsite from the local copy first (the `devsite-import` skill), push
-the fix there, and give the client the URL to check. Pushing to production is
-not something this agent can do.
-
-```
-site_push(site_key: "<devsite>", plan_id: "<plan>", parts: ["code"])
-site_status(site_key: "<devsite>")   # every 10 s until applied or failed
-```
+The fix goes to the site `before_production` names first — the
+`pushing-to-staging` skill, which makes a devsite when there is none — and
+the client gets that URL to check; `verifying-a-deploy` confirms it is up and
+clean. Production is `releasing-to-production`, and only when the developer
+says so.
 
 ## 7. Tell the client, with evidence
 
