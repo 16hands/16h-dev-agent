@@ -37,7 +37,7 @@ SUBFOLDER_DOCROOTS = ("public", "web")
 # Root first: a plain PHP app's docroot guess is the first of these holding an index.php.
 INDEX_PHP_DOCROOTS = (".",) + SUBFOLDER_DOCROOTS
 APPS_SERVED_FROM_PUBLIC = ("laravel", "statamic", "symfony")
-WORDPRESS_CONTENT_FOLDER_NAMES = ("wp-content", "plugins", "themes", "mu-plugins")
+WORDPRESS_INNER_FOLDER_NAMES = ("wp-content", "plugins", "themes", "mu-plugins", "wp-admin", "wp-includes")
 
 HOSTNAME_KEY_ALTERNATIVES = "|".join(HOSTNAME_KEYS)
 DOT_ENV_HOSTNAME_LINE = re.compile(rf"^\s*(?:{HOSTNAME_KEY_ALTERNATIVES})\s*=\s*(?P<raw_value>.*?)\s*$")
@@ -205,9 +205,16 @@ def has_wp_content_folders(folder: Path) -> bool:
     return is_directory(folder / "themes") and is_directory(folder / "plugins")
 
 
+def holds_wordpress_core(folder: Path) -> bool:
+    """wp-load.php or wp-includes/: a WordPress root even without wp-config.php, which repos gitignore
+    and WordPress also reads from one folder up."""
+    return is_regular_file(folder / "wp-load.php") or is_directory(folder / "wp-includes")
+
+
 def holds_wordpress_marker(folder: Path) -> bool:
     return (
         is_regular_file(folder / "wp-config.php")
+        or holds_wordpress_core(folder)
         or requires_roots_wordpress(folder)
         or has_bedrock_web_app_folder(folder)
         or is_wordpress_theme(folder)
@@ -232,19 +239,19 @@ def holds_app_marker(folder: Path) -> bool:
     )
 
 
-def is_inside_wordpress_content(folder: Path) -> bool:
-    """The folder or one of its first two parents is wp-content, plugins, themes or mu-plugins."""
+def is_inside_wordpress_tree(folder: Path) -> bool:
+    """The folder or one of its first two parents is one of WordPress's own folders (wp-content, wp-admin and so on)."""
     resolved_folder = folder.resolve()
     nearest_folder_names = (resolved_folder.name, resolved_folder.parent.name, resolved_folder.parent.parent.name)
-    return any(folder_name in WORDPRESS_CONTENT_FOLDER_NAMES for folder_name in nearest_folder_names)
+    return any(folder_name in WORDPRESS_INNER_FOLDER_NAMES for folder_name in nearest_folder_names)
 
 
 def has_root_index_php_of_its_own(folder: Path) -> bool:
-    """An index.php at the folder's root, unless WordPress put it there: a "Silence is golden" file in
-    wp-content/, plugins/ or themes/, or the one beside a standalone plugin's header."""
+    """An index.php at the folder's root, unless WordPress put it there: wp-admin's own, a "Silence is golden"
+    file in wp-content/, plugins/ or themes/, or the one beside a standalone plugin's header."""
     return (
         is_regular_file(folder / "index.php")
-        and not is_inside_wordpress_content(folder)
+        and not is_inside_wordpress_tree(folder)
         and not is_wordpress_plugin(folder)
     )
 
@@ -356,7 +363,7 @@ def detect_tree_shape(site_root: Path) -> str:
         return "whole_tree"
     if requires_roots_wordpress(site_root) or has_bedrock_web_app_folder(site_root):
         return "bedrock"
-    if is_regular_file(site_root / "wp-config.php"):
+    if is_regular_file(site_root / "wp-config.php") or holds_wordpress_core(site_root):
         return "whole_tree"
     if has_wp_content_folders(site_root):
         return "wp_content_only"
@@ -368,8 +375,8 @@ def detect_tree_shape(site_root: Path) -> str:
 def detect_app_and_shape(site_root: Path, has_git: bool, has_remote: bool) -> tuple[str | None, str]:
     """The app, and the devsite-import git shape: no git and no origin outrank what the tree looks like.
 
-    Only WordPress has partial-tree shapes (Bedrock, wp-content, a theme); any other app's repo is
-    the whole tree, so "none" keeps meaning "no .git" for the skills that read it.
+    Only WordPress has partial-tree shapes (Bedrock, wp-content, a theme); any other app the hook
+    names is the whole tree. So "none" means either no .git or no app the hook can name.
     """
     app = detect_app(site_root)
     if not has_git:

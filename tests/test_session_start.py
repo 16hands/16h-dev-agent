@@ -353,6 +353,47 @@ def test_a_standalone_wordpress_plugin_repo_stays_quiet(tmp_path):
     assert recon(plugin_repository) == {"is_site": False}
 
 
+WORDPRESS_CORE_INDEX_PHP = "<?php\ndefine( 'WP_USE_THEMES', true );\nrequire __DIR__ . '/wp-blog-header.php';\n"
+
+
+@pytest.mark.parametrize("core_marker", ["wp-includes", "wp-load.php"])
+def test_a_wordpress_clone_without_its_gitignored_wp_config_is_still_wordpress(tmp_path, core_marker):
+    # WordPress repos gitignore wp-config.php, so a fresh clone has core's own index.php and no wp-config.php.
+    blog_folder = tmp_path / "blog"
+    make_wordpress(blog_folder, git=False)
+    (blog_folder / "wp-config.php").unlink()
+    (blog_folder / "index.php").write_text(WORDPRESS_CORE_INDEX_PHP)
+    if core_marker == "wp-load.php":
+        (blog_folder / "wp-includes").rmdir()
+        (blog_folder / "wp-load.php").write_text("<?php\n")
+    init_git_repository(blog_folder, DEFAULT_REMOTE)
+    facts = recon(blog_folder)
+    assert (facts["repo"]["app"], facts["shape"], facts["docroot_guess"]) == ("wordpress", "whole_tree", "")
+
+
+def test_a_wordpress_whose_wp_config_sits_one_folder_up_is_wordpress(tmp_path):
+    hosting_folder = tmp_path / "hosting"
+    blog_folder = hosting_folder / "blog"
+    make_wordpress(blog_folder, git=False)
+    (blog_folder / "wp-config.php").rename(hosting_folder / "wp-config.php")
+    (blog_folder / "index.php").write_text(WORDPRESS_CORE_INDEX_PHP)
+    init_git_repository(blog_folder, DEFAULT_REMOTE)
+    facts = recon(blog_folder)
+    assert (facts["repo"]["app"], facts["shape"]) == ("wordpress", "whole_tree")
+
+
+def test_wp_admin_opened_on_its_own_stays_quiet(tmp_path):
+    blog_folder = tmp_path / "blog"
+    make_wordpress(blog_folder, git=False)
+    wp_admin_folder = blog_folder / "wp-admin"
+    (wp_admin_folder / "includes").mkdir(parents=True)
+    (wp_admin_folder / "network").mkdir()
+    (wp_admin_folder / "index.php").write_text("<?php\nrequire_once __DIR__ . '/admin.php';\n")
+    (wp_admin_folder / "network" / "index.php").write_text("<?php\nrequire_once __DIR__ . '/admin.php';\n")
+    init_git_repository(blog_folder, DEFAULT_REMOTE)
+    assert recon(wp_admin_folder) == {"is_site": False}
+
+
 @pytest.mark.skipif(not hasattr(os, "geteuid") or os.geteuid() == 0, reason="root reads a chmod-000 folder anyway")
 def test_an_unreadable_public_or_web_folder_does_not_blank_the_project_block(tmp_path):
     make_phpapp(tmp_path / "tools", ".")
