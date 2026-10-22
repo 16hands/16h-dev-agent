@@ -77,8 +77,9 @@ def make_not_a_site(repository):
     init_git_repository(repository, DEFAULT_REMOTE)
 
 
-def recon(cwd):
-    completed = subprocess.run([sys.executable, str(RECON), str(cwd)], capture_output=True, text=True, timeout=5)
+def recon(cwd, environment=None):
+    completed = subprocess.run([sys.executable, str(RECON), str(cwd)], capture_output=True, text=True, timeout=5,
+                               env=environment)
     assert completed.returncode == 0, completed.stderr
     assert completed.stderr == ""
     return json.loads(completed.stdout) if completed.stdout.strip() else None
@@ -254,6 +255,121 @@ def test_wp_content_only_is_a_themes_and_plugins_folder_with_no_wp_config(tmp_pa
     assert recon_module.detect_app_and_shape(tmp_path, has_git=False, has_remote=False) == ("wordpress", "none")
     (tmp_path / "wp-config.php").write_text("<?php\n")
     assert recon_module.detect_app_and_shape(tmp_path, has_git=True, has_remote=True) == ("wordpress", "whole_tree")
+
+
+def test_a_gitless_site_inside_an_unrelated_parent_repo_reports_no_git(tmp_path):
+    dotfiles_home = tmp_path / "dotfiles-home"
+    dotfiles_home.mkdir()
+    (dotfiles_home / ".zshrc").write_text("export EDITOR=vim\n")
+    init_git_repository(dotfiles_home, "git@github.com:carl/dotfiles.git")
+    blog_folder = dotfiles_home / "Sites" / "blog"
+    make_wordpress(blog_folder, git=False)
+    facts = recon(blog_folder)
+    assert facts["is_site"] is True
+    assert [facts["repo"][key] for key in ("remote_url", "root_commit", "branch")] == [None, None, None]
+    assert facts["shape"] == "none"
+    assert facts["dirty"] is False
+    assert "dotfiles" not in json.dumps(facts)
+
+
+def test_a_repo_that_starts_at_the_folder_given_still_owns_a_site_below_it(tmp_path):
+    site_repository = tmp_path / "monorepo"
+    make_wordpress(site_repository / "sites" / "blog", git=False)
+    init_git_repository(site_repository, DEFAULT_REMOTE)
+    facts = recon(site_repository)
+    assert facts["repo"]["remote_url"] == DEFAULT_REMOTE
+    assert len(facts["repo"]["root_commit"]) == 40
+
+
+def test_a_theme_folder_opened_inside_a_wordpress_repo_keeps_the_repos_git(tmp_path):
+    make_wordpress(tmp_path)
+    theme_folder = tmp_path / "wp-content" / "themes" / "foo"
+    theme_folder.mkdir(parents=True)
+    (theme_folder / "style.css").write_text("/*\nTheme Name: Foo\n*/\n")
+    run_git(tmp_path, "add", "-A")
+    run_git(tmp_path, "commit", "-q", "-m", "add the theme")
+    facts = recon(theme_folder)
+    assert facts["repo"]["remote_url"] == DEFAULT_REMOTE
+    assert len(facts["repo"]["root_commit"]) == 40
+    assert facts["repo"]["folder_name"] == "foo"
+    assert (facts["repo"]["app"], facts["shape"]) == ("wordpress", "theme_only")
+
+
+def test_a_repo_of_themes_and_plugins_with_no_wp_config_is_wp_content_only(tmp_path):
+    wp_content_repository = tmp_path / "client-wp-content"
+    for theme_name in ("alpha", "beta"):
+        (wp_content_repository / "themes" / theme_name).mkdir(parents=True)
+        (wp_content_repository / "themes" / theme_name / "style.css").write_text(f"/*\nTheme Name: {theme_name}\n*/\n")
+    (wp_content_repository / "plugins").mkdir()
+    (wp_content_repository / "plugins" / "index.php").write_text("<?php\n")
+    init_git_repository(wp_content_repository, DEFAULT_REMOTE)
+    facts = recon(wp_content_repository)
+    assert facts["is_site"] is True
+    assert facts["repo"]["app"] == "wordpress"
+    assert facts["shape"] == "wp_content_only"
+    assert facts["repo"]["folder_name"] == "client-wp-content"
+    assert facts["repo"]["remote_url"] == DEFAULT_REMOTE
+
+
+def test_a_themes_folder_without_plugins_is_found_as_the_theme_alone(tmp_path):
+    (tmp_path / "themes" / "alpha").mkdir(parents=True)
+    (tmp_path / "themes" / "alpha" / "style.css").write_text("/*\nTheme Name: alpha\n*/\n")
+    init_git_repository(tmp_path, DEFAULT_REMOTE)
+    facts = recon(tmp_path)
+    assert (facts["repo"]["app"], facts["shape"]) == ("wordpress", "theme_only")
+    assert facts["repo"]["folder_name"] == tmp_path.name
+
+
+def test_the_home_directory_is_never_walked(tmp_path):
+    make_wordpress(tmp_path / "Sites" / "blog", git=False)
+    with_tmp_path_as_home = {**os.environ, "HOME": str(tmp_path)}
+    assert recon(tmp_path, environment=with_tmp_path_as_home) == {"is_site": False}
+    with_another_home = {**os.environ, "HOME": str(tmp_path / "somebody-else")}
+    assert recon(tmp_path, environment=with_another_home)["is_site"] is True
+
+
+def test_the_home_directory_and_the_filesystem_root_are_not_listed_at_all(tmp_path, monkeypatch):
+    recon_module = load_recon_module()
+
+    def fail_if_looked_at(folder):
+        raise AssertionError(f"looked inside {folder}")
+
+    monkeypatch.setattr(recon_module, "list_child_folders", fail_if_looked_at)
+    monkeypatch.setattr(recon_module, "holds_site_marker", fail_if_looked_at)
+    monkeypatch.setenv("HOME", str(tmp_path))
+    assert recon_module.find_site_root(tmp_path) is None
+    assert recon_module.find_site_root(Path(tmp_path.anchor)) is None
+
+
+def test_a_parent_of_several_sites_is_not_a_site(tmp_path):
+    sites_folder = tmp_path / "Sites"
+    make_wordpress(sites_folder / "blog", git=False)
+    make_wordpress(sites_folder / "shop", git=False)
+    assert recon(sites_folder) == {"is_site": False}
+
+
+def test_the_shallowest_site_wins_over_a_deeper_one(tmp_path):
+    sites_folder = tmp_path / "Sites"
+    make_wordpress(sites_folder / "blog", git=False, env="APP_URL=http://blog.test\n")
+    make_wordpress(sites_folder / "archive" / "old-shop", git=False, env="APP_URL=http://old-shop.test\n")
+    facts = recon(sites_folder)
+    assert facts["repo"]["hostnames"] == ["blog.test"]
+    assert facts["repo"]["folder_name"] == "Sites"
+
+
+def test_a_repo_local_fsmonitor_command_is_never_run(tmp_path):
+    site_folder = tmp_path / "site"
+    make_wordpress(site_folder)
+    marker_file = tmp_path / "fsmonitor-ran"
+    hook_script = tmp_path / "fsmonitor-hook.sh"
+    hook_script.write_text(f"#!/bin/sh\ntouch '{marker_file}'\n")
+    hook_script.chmod(0o755)
+    run_git(site_folder, "config", "core.fsmonitor", str(hook_script))
+    subprocess.run(["git", "-C", str(site_folder), "status", "--porcelain"], capture_output=True, timeout=10)
+    assert marker_file.exists(), "fixture is wrong: a plain git status should have run the hook"
+    marker_file.unlink()
+    recon(site_folder)
+    assert not marker_file.exists()
 
 
 def test_recon_is_fast(tmp_path):

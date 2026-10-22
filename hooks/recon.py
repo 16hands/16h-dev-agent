@@ -106,19 +106,51 @@ def holds_site_marker(folder: Path) -> bool:
     )
 
 
+def is_home_or_filesystem_root(folder: Path) -> bool:
+    resolved_folder = folder.resolve()
+    if resolved_folder.parent == resolved_folder:
+        return True
+    try:
+        return resolved_folder == Path.home().resolve()
+    except (OSError, RuntimeError):
+        return False
+
+
+def promote_to_wp_content_root(candidate: Path, cwd: Path) -> Path:
+    """<root>/themes/<name> with a plugins/ beside themes/ is one wp-content repo: its site root is <root>."""
+    wp_content_root = candidate.parent.parent
+    is_inside_given_folder = wp_content_root == cwd or cwd in wp_content_root.parents
+    is_theme_of_wp_content_root = (
+        candidate.parent.name == "themes" and is_wordpress_theme(candidate) and (wp_content_root / "plugins").is_dir()
+    )
+    return wp_content_root if is_theme_of_wp_content_root and is_inside_given_folder else candidate
+
+
 def find_site_root(cwd: Path) -> Path | None:
-    """The folder itself, else the first folder one or two levels down that holds a site marker."""
+    """The folder itself, else the one site one or two levels down; a parent of several sites is not a site.
+
+    Home and the filesystem root are never looked into: listing ~/Documents or ~/Desktop
+    raises a macOS file-access prompt, and a hook must never prompt.
+    """
+    if is_home_or_filesystem_root(cwd):
+        return None
     if holds_site_marker(cwd):
         return cwd
     folders_one_level_down = list_child_folders(cwd)
-    for folder in folders_one_level_down:
-        if holds_site_marker(folder):
-            return folder
-    for folder_one_level_down in folders_one_level_down:
-        for folder in list_child_folders(folder_one_level_down):
-            if holds_site_marker(folder):
-                return folder
-    return None
+    candidates = [folder for folder in folders_one_level_down if holds_site_marker(folder)]
+    if not candidates:
+        candidates = [
+            folder
+            for folder_one_level_down in folders_one_level_down
+            for folder in list_child_folders(folder_one_level_down)
+            if holds_site_marker(folder)
+        ]
+    site_roots = []
+    for candidate in candidates:
+        site_root = promote_to_wp_content_root(candidate, cwd)
+        if site_root not in site_roots:
+            site_roots.append(site_root)
+    return site_roots[0] if len(site_roots) == 1 else None
 
 
 def detect_app(site_root: Path) -> str | None:
@@ -177,14 +209,31 @@ def read_root_commit(site_root: Path) -> str | None:
     return root_commits[0]
 
 
-def git_facts(site_root: Path) -> dict:
+def is_repository_of_this_site(repository_root: Path, cwd: Path) -> bool:
+    """git searches upward, so a gitless site inside someone else's repo would borrow that repo's identity.
+
+    A repo found above the folder given is the site's own only when it is itself a site
+    (a theme folder opened inside a WordPress repo); otherwise it is an unrelated parent.
+    """
+    resolved_repository_root = repository_root.resolve()
+    resolved_cwd = cwd.resolve()
+    if resolved_repository_root == resolved_cwd or resolved_cwd in resolved_repository_root.parents:
+        return True
+    return holds_site_marker(resolved_repository_root)
+
+
+def git_facts(site_root: Path, cwd: Path | None = None) -> dict:
     no_git_facts = {"has_git": False, "remote_url": None, "branch": None, "root_commit": None, "is_dirty": False}
-    inside_work_tree_answer = run_quietly(["git", "rev-parse", "--is-inside-work-tree"], site_root)
-    if inside_work_tree_answer is None or inside_work_tree_answer.strip() != "true":
+    repository_root_answer = run_quietly(["git", "rev-parse", "--show-toplevel"], site_root)
+    if repository_root_answer is None or not repository_root_answer.strip():
+        return no_git_facts
+    if not is_repository_of_this_site(Path(repository_root_answer.rstrip("\r\n")), cwd or site_root):
         return no_git_facts
     origin_url = (run_quietly(["git", "remote", "get-url", "origin"], site_root) or "").strip()
     branch_name = (run_quietly(["git", "symbolic-ref", "--short", "-q", "HEAD"], site_root) or "").strip()
-    porcelain_status = run_quietly(["git", "--no-optional-locks", "status", "--porcelain"], site_root)
+    porcelain_status = run_quietly(
+        ["git", "-c", "core.fsmonitor=false", "--no-optional-locks", "status", "--porcelain"], site_root
+    )
     return {
         "has_git": True,
         "remote_url": strip_user_info(origin_url) if origin_url else None,
@@ -237,7 +286,7 @@ def collect_facts(cwd: Path) -> dict:
     site_root = find_site_root(cwd)
     if site_root is None:
         return {"is_site": False}
-    facts_from_git = git_facts(site_root)
+    facts_from_git = git_facts(site_root, cwd)
     app, shape = detect_app_and_shape(
         site_root,
         has_git=facts_from_git["has_git"],
