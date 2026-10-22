@@ -65,7 +65,6 @@ def make_statamic(site_folder, *, git=True, remote=DEFAULT_REMOTE):
     make_laravel(site_folder, git=False)
     (site_folder / "please").write_text("#!/usr/bin/env php\n<?php\n")
     (site_folder / "composer.json").write_text('{"require": {"laravel/framework": "^11.0", "statamic/cms": "^5.0"}}\n')
-    (site_folder / "public").mkdir(exist_ok=True); (site_folder / "public" / "index.php").write_text("<?php\n")
     (site_folder / "content").mkdir(exist_ok=True)
     if git: init_git_repository(site_folder, remote)
 
@@ -258,6 +257,7 @@ def test_a_plain_php_app_is_phpapp_with_its_docroot_guess(tmp_path, docroot, gue
         assert facts == {"is_site": False}        # htdocs/index.php is not a marker: the hook stays quiet
     else:
         assert facts["repo"]["app"] == "phpapp" and facts["docroot_guess"] == guess
+        assert facts["shape"] == "whole_tree"
 
 
 def test_a_static_site_does_not_fire_the_hook(tmp_path):
@@ -267,7 +267,8 @@ def test_a_static_site_does_not_fire_the_hook(tmp_path):
 
 def test_a_statamic_site_opened_inside_public_is_found_above(tmp_path):
     make_statamic(tmp_path / "brand")
-    assert recon(tmp_path / "brand" / "public")["repo"]["app"] == "statamic"
+    facts = recon(tmp_path / "brand" / "public")
+    assert facts["repo"]["app"] == "statamic" and facts["repo"]["folder_name"] == "brand"
 
 
 def test_a_laravel_app_with_wordpress_under_public_is_named_laravel_by_the_hook(tmp_path):
@@ -278,12 +279,18 @@ def test_a_laravel_app_with_wordpress_under_public_is_named_laravel_by_the_hook(
 
 
 def test_drupal_and_joomla_are_named_so_the_platform_can_refuse_them(tmp_path):
-    drupal = tmp_path / "d"; (drupal / "web" / "core" / "lib").mkdir(parents=True)
-    (drupal / "web" / "core" / "lib" / "Drupal.php").write_text("<?php\n"); init_git_repository(drupal, DEFAULT_REMOTE)
-    joomla = tmp_path / "j"; (joomla / "administrator").mkdir(parents=True); (joomla / "libraries" / "src").mkdir(parents=True)
-    (joomla / "index.php").write_text("<?php\n"); init_git_repository(joomla, DEFAULT_REMOTE)
-    assert recon(drupal)["repo"]["app"] == "drupal"
-    assert recon(joomla)["repo"]["app"] == "joomla"
+    drupal_site_folder = tmp_path / "drupal-site"
+    (drupal_site_folder / "web" / "core" / "lib").mkdir(parents=True)
+    (drupal_site_folder / "web" / "core" / "lib" / "Drupal.php").write_text("<?php\n")
+    init_git_repository(drupal_site_folder, DEFAULT_REMOTE)
+    joomla_site_folder = tmp_path / "joomla-site"
+    (joomla_site_folder / "administrator").mkdir(parents=True)
+    (joomla_site_folder / "libraries" / "src").mkdir(parents=True)
+    (joomla_site_folder / "index.php").write_text("<?php\n")
+    init_git_repository(joomla_site_folder, DEFAULT_REMOTE)
+    drupal_facts, joomla_facts = recon(drupal_site_folder), recon(joomla_site_folder)
+    assert (drupal_facts["repo"]["app"], drupal_facts["shape"]) == ("drupal", "whole_tree")
+    assert (joomla_facts["repo"]["app"], joomla_facts["shape"]) == ("joomla", "whole_tree")
 
 
 def test_the_repo_keys_are_still_exactly_six_and_docroot_guess_sits_beside_shape(tmp_path):
@@ -309,6 +316,74 @@ def test_a_wordpress_in_public_lends_its_index_php_to_no_plain_php_app_above_it(
     init_git_repository(agency_repository, DEFAULT_REMOTE)
     agency_facts = recon(agency_repository)
     assert (agency_facts["repo"]["app"], agency_facts["shape"]) == ("wordpress", "whole_tree")
+
+
+SILENCE_IS_GOLDEN = "<?php\n// Silence is golden.\n"
+HELLO_DOLLY_HEADER = "<?php\n/*\nPlugin Name: Hello Dolly\nVersion: 1.7.2\n*/\n"
+
+
+def test_wordpress_folders_opened_directly_are_never_a_plain_php_app(tmp_path):
+    # WordPress ships a "Silence is golden" index.php in wp-content/, plugins/ and themes/, and most plugins carry one.
+    blog_folder = tmp_path / "blog"
+    make_wordpress(blog_folder, git=False)
+    wp_content_folder = blog_folder / "wp-content"
+    theme_folder = wp_content_folder / "themes" / "twentytwentyfour"
+    plugin_folder = wp_content_folder / "plugins" / "hello-dolly"
+    theme_folder.mkdir(parents=True); plugin_folder.mkdir(parents=True)
+    (theme_folder / "style.css").write_text("/*\nTheme Name: Twenty Twenty-Four\n*/\n")
+    (plugin_folder / "hello.php").write_text(HELLO_DOLLY_HEADER)
+    folders_with_silence = (wp_content_folder / "themes", wp_content_folder / "plugins", theme_folder, plugin_folder)
+    for folder_with_silence in folders_with_silence:
+        (folder_with_silence / "index.php").write_text(SILENCE_IS_GOLDEN)
+    init_git_repository(blog_folder, DEFAULT_REMOTE)
+    themes_facts = recon(wp_content_folder / "themes")
+    assert (themes_facts["repo"]["app"], themes_facts["shape"]) == ("wordpress", "theme_only")
+    wp_content_facts = recon(wp_content_folder)
+    assert (wp_content_facts["repo"]["app"], wp_content_facts["shape"]) == ("wordpress", "wp_content_only")
+    assert recon(wp_content_folder / "plugins") == {"is_site": False}
+    assert recon(plugin_folder) == {"is_site": False}
+
+
+def test_a_standalone_wordpress_plugin_repo_stays_quiet(tmp_path):
+    plugin_repository = tmp_path / "hello-dolly"
+    plugin_repository.mkdir()
+    (plugin_repository / "hello.php").write_text(HELLO_DOLLY_HEADER)
+    (plugin_repository / "index.php").write_text(SILENCE_IS_GOLDEN)
+    init_git_repository(plugin_repository, DEFAULT_REMOTE)
+    assert recon(plugin_repository) == {"is_site": False}
+
+
+@pytest.mark.skipif(not hasattr(os, "geteuid") or os.geteuid() == 0, reason="root reads a chmod-000 folder anyway")
+def test_an_unreadable_public_or_web_folder_does_not_blank_the_project_block(tmp_path):
+    make_phpapp(tmp_path / "tools", ".")
+    locked_folders = [tmp_path / "tools" / "public", tmp_path / "tools" / "web"]
+    for locked_folder in locked_folders:
+        locked_folder.mkdir(); locked_folder.chmod(0)
+    try:
+        facts = recon(tmp_path / "tools")
+    finally:
+        for locked_folder in locked_folders:
+            locked_folder.chmod(0o755)
+    assert (facts["repo"]["app"], facts["docroot_guess"]) == ("phpapp", ".")
+
+
+def test_composer_json_is_read_once_however_many_markers_ask(tmp_path, monkeypatch):
+    recon_module = load_recon_module()
+    drupal_site_folder = tmp_path / "drupal-by-composer"
+    drupal_site_folder.mkdir()
+    (drupal_site_folder / "composer.json").write_text('{"require-dev": {"drupal/core-recommended": "^10.3"}}\n')
+    composer_json_reads = []
+    read_text_unwatched = recon_module.read_text_or_empty
+
+    def read_text_and_count_composer_json(file_path):
+        if file_path.name == "composer.json":
+            composer_json_reads.append(file_path)
+        return read_text_unwatched(file_path)
+
+    monkeypatch.setattr(recon_module, "read_text_or_empty", read_text_and_count_composer_json)
+    site_root = recon_module.find_site_root(drupal_site_folder)
+    assert site_root == drupal_site_folder and recon_module.detect_app(site_root) == "drupal"
+    assert len(composer_json_reads) == 1
 
 
 def test_a_style_css_without_a_theme_name_in_its_first_twenty_lines_is_not_a_theme(tmp_path):

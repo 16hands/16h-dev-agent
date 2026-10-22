@@ -9,6 +9,7 @@ can never block a session.
 """
 from __future__ import annotations
 
+import functools
 import json
 import os
 import re
@@ -28,13 +29,15 @@ from pathlib import Path
 RECON_DEADLINE_SECONDS = 5
 SUBPROCESS_TIMEOUT_SECONDS = 2
 FILE_READ_CAP_BYTES = 256 * 1024
-THEME_HEADER_CHARACTER_COUNT = 8 * 1024
+WORDPRESS_HEADER_CHARACTER_COUNT = 8 * 1024
 THEME_HEADER_LINE_COUNT = 20
 HOSTNAME_KEYS = ("APP_URL", "WP_HOME", "WP_SITEURL", "DOMAIN_CURRENT_SITE")
 FOLDERS_NOT_WORTH_WALKING = ("node_modules", "vendor")
+SUBFOLDER_DOCROOTS = ("public", "web")
 # Root first: a plain PHP app's docroot guess is the first of these holding an index.php.
-INDEX_PHP_DOCROOTS = (".", "public", "web")
+INDEX_PHP_DOCROOTS = (".",) + SUBFOLDER_DOCROOTS
 APPS_SERVED_FROM_PUBLIC = ("laravel", "statamic", "symfony")
+WORDPRESS_CONTENT_FOLDER_NAMES = ("wp-content", "plugins", "themes", "mu-plugins")
 
 HOSTNAME_KEY_ALTERNATIVES = "|".join(HOSTNAME_KEYS)
 DOT_ENV_HOSTNAME_LINE = re.compile(rf"^\s*(?:{HOSTNAME_KEY_ALTERNATIVES})\s*=\s*(?P<raw_value>.*?)\s*$")
@@ -77,6 +80,14 @@ def is_regular_file(file_path: Path) -> bool:
         return False
 
 
+def is_directory(folder_path: Path) -> bool:
+    """is_regular_file's twin: Path.is_dir raises PermissionError under a folder that cannot be looked into."""
+    try:
+        return stat.S_ISDIR(folder_path.stat().st_mode)
+    except OSError:
+        return False
+
+
 def read_text_or_empty(file_path: Path) -> str:
     """A regular file's text, or "" for anything else and for a file over the read cap."""
     try:
@@ -94,29 +105,31 @@ def list_child_folders(folder: Path) -> list[Path]:
     try:
         for child in sorted(folder.iterdir()):
             is_worth_walking = not child.name.startswith(".") and child.name not in FOLDERS_NOT_WORTH_WALKING
-            if is_worth_walking and child.is_dir():
+            if is_worth_walking and is_directory(child):
                 child_folders.append(child)
     except OSError:
         pass
     return child_folders
 
 
-def read_composer_requirements(folder: Path) -> set[str]:
+@functools.lru_cache(maxsize=None)
+def read_composer_requirements(folder: Path) -> frozenset[str]:
     """The package names under composer.json's require and require-dev; empty for a missing or unreadable file.
 
-    RecursionError too: a composer.json nested thousands deep must cost the hook nothing.
+    Cached, since every marker check asks the same folders and recon runs once. RecursionError
+    too: a composer.json nested thousands deep must cost the hook nothing.
     """
     try:
         composer_manifest = json.loads(read_text_or_empty(folder / "composer.json"))
     except (ValueError, RecursionError):
-        return set()
+        return frozenset()
     required_package_names = set()
     if isinstance(composer_manifest, dict):
         for section_name in ("require", "require-dev"):
             requirements_section = composer_manifest.get(section_name)
             if isinstance(requirements_section, dict):
                 required_package_names.update(requirements_section)
-    return required_package_names
+    return frozenset(required_package_names)
 
 
 def requires_package(folder: Path, package_name: str) -> bool:
@@ -124,101 +137,136 @@ def requires_package(folder: Path, package_name: str) -> bool:
 
 
 def requires_roots_wordpress(folder: Path) -> bool:
-    return '"roots/wordpress"' in read_text_or_empty(folder / "composer.json")
+    return requires_package(folder, "roots/wordpress")
+
+
+def read_wordpress_header(file_path: Path) -> str:
+    """A regular file's first 8 KiB, where WordPress reads theme and plugin headers; "" for anything else."""
+    if not is_regular_file(file_path):
+        return ""
+    try:
+        with file_path.open(encoding="utf-8", errors="replace") as header_file:
+            return header_file.read(WORDPRESS_HEADER_CHARACTER_COUNT)
+    except OSError:
+        return ""
 
 
 def has_artisan(folder: Path) -> bool:
-    return (folder / "artisan").is_file()
+    return is_regular_file(folder / "artisan")
 
 
 def has_bin_console(folder: Path) -> bool:
-    return (folder / "bin" / "console").is_file()
+    return is_regular_file(folder / "bin" / "console")
 
 
 def has_index_php(folder: Path) -> bool:
     """index.php at the folder itself, under public/ or under web/; index.html is never a marker."""
-    return any((folder / docroot / "index.php").is_file() for docroot in INDEX_PHP_DOCROOTS)
+    return any(is_regular_file(folder / docroot / "index.php") for docroot in INDEX_PHP_DOCROOTS)
 
 
 def is_symfony(folder: Path) -> bool:
     return has_bin_console(folder) and (
-        requires_package(folder, "symfony/framework-bundle") or (folder / "symfony.lock").is_file()
+        requires_package(folder, "symfony/framework-bundle") or is_regular_file(folder / "symfony.lock")
     )
 
 
 def is_drupal(folder: Path) -> bool:
     return (
-        (folder / "core" / "lib" / "Drupal.php").is_file()
-        or (folder / "web" / "core" / "lib" / "Drupal.php").is_file()
+        is_regular_file(folder / "core" / "lib" / "Drupal.php")
+        or is_regular_file(folder / "web" / "core" / "lib" / "Drupal.php")
         or requires_package(folder, "drupal/core-recommended")
     )
 
 
 def is_joomla(folder: Path) -> bool:
-    return (folder / "administrator").is_dir() and (folder / "libraries" / "src").is_dir()
+    return is_directory(folder / "administrator") and is_directory(folder / "libraries" / "src")
 
 
 def has_bedrock_web_app_folder(folder: Path) -> bool:
-    return (folder / "web" / "app").is_dir()
+    return is_directory(folder / "web" / "app")
 
 
 def is_wordpress_theme(folder: Path) -> bool:
     """A `Theme Name:` in style.css's first 20 lines, read from its first 8 KiB as WordPress reads theme headers."""
-    stylesheet_path = folder / "style.css"
-    if not is_regular_file(stylesheet_path):
-        return False
-    try:
-        with stylesheet_path.open(encoding="utf-8", errors="replace") as stylesheet:
-            header_text = stylesheet.read(THEME_HEADER_CHARACTER_COUNT)
-    except OSError:
-        return False
+    header_text = read_wordpress_header(folder / "style.css")
     return any("Theme Name:" in line for line in header_text.splitlines()[:THEME_HEADER_LINE_COUNT])
 
 
+def is_wordpress_plugin(folder: Path) -> bool:
+    """A `Plugin Name:` in the first 8 KiB of a PHP file at the folder's top, where WordPress reads plugin headers."""
+    try:
+        top_level_php_files = list(folder.glob("*.php"))
+    except OSError:
+        return False
+    return any("Plugin Name:" in read_wordpress_header(php_file) for php_file in top_level_php_files)
+
+
 def has_wp_content_folders(folder: Path) -> bool:
-    return (folder / "themes").is_dir() and (folder / "plugins").is_dir()
+    return is_directory(folder / "themes") and is_directory(folder / "plugins")
 
 
-def is_wordpress(folder: Path) -> bool:
+def holds_wordpress_marker(folder: Path) -> bool:
     return (
-        (folder / "wp-config.php").is_file()
+        is_regular_file(folder / "wp-config.php")
         or requires_roots_wordpress(folder)
         or has_bedrock_web_app_folder(folder)
         or is_wordpress_theme(folder)
-        or has_wp_content_folders(folder)
     )
+
+
+def is_wordpress(folder: Path) -> bool:
+    """A WordPress marker, or themes/ and plugins/ side by side: a wp-content repo, reached by walking to a theme."""
+    return holds_wordpress_marker(folder) or has_wp_content_folders(folder)
 
 
 def holds_app_marker(folder: Path) -> bool:
     """A marker of a named app. index.php is not one: it is how a plain PHP app is found, at the folder given only."""
     return (
-        (folder / "wp-config.php").is_file()
+        holds_wordpress_marker(folder)
         or has_artisan(folder)
         or has_bin_console(folder)
-        or requires_roots_wordpress(folder)
         or requires_package(folder, "statamic/cms")
         or requires_package(folder, "symfony/framework-bundle")
-        or has_bedrock_web_app_folder(folder)
-        or is_wordpress_theme(folder)
         or is_drupal(folder)
         or is_joomla(folder)
     )
 
 
-def has_index_php_of_its_own(folder: Path) -> bool:
-    """has_index_php, except that a public/ or web/ holding an app marker keeps its index.php to itself.
+def is_inside_wordpress_content(folder: Path) -> bool:
+    """The folder or one of its first two parents is wp-content, plugins, themes or mu-plugins."""
+    resolved_folder = folder.resolve()
+    nearest_folder_names = (resolved_folder.name, resolved_folder.parent.name, resolved_folder.parent.parent.name)
+    return any(folder_name in WORDPRESS_CONTENT_FOLDER_NAMES for folder_name in nearest_folder_names)
+
+
+def has_root_index_php_of_its_own(folder: Path) -> bool:
+    """An index.php at the folder's root, unless WordPress put it there: a "Silence is golden" file in
+    wp-content/, plugins/ or themes/, or the one beside a standalone plugin's header."""
+    return (
+        is_regular_file(folder / "index.php")
+        and not is_inside_wordpress_content(folder)
+        and not is_wordpress_plugin(folder)
+    )
+
+
+def has_docroot_index_php_of_its_own(folder: Path) -> bool:
+    """An index.php under public/ or web/, unless that folder holds an app marker of its own.
 
     WordPress ships an index.php. Local installs it at <site>/app/public and agencies keep it
     in public/ beside their build tools; neither app/ nor that root is a plain PHP app.
     """
     return any(
-        (folder / docroot / "index.php").is_file() and (docroot == "." or not holds_app_marker(folder / docroot))
-        for docroot in INDEX_PHP_DOCROOTS
+        is_regular_file(folder / docroot / "index.php") and not holds_app_marker(folder / docroot)
+        for docroot in SUBFOLDER_DOCROOTS
     )
 
 
 def holds_site_marker(folder: Path) -> bool:
-    return holds_app_marker(folder) or has_index_php_of_its_own(folder)
+    return (
+        holds_app_marker(folder)
+        or has_root_index_php_of_its_own(folder)
+        or has_docroot_index_php_of_its_own(folder)
+    )
 
 
 def is_home_or_filesystem_root(folder: Path) -> bool:
@@ -236,7 +284,9 @@ def promote_to_wp_content_root(candidate: Path, cwd: Path) -> Path:
     wp_content_root = candidate.parent.parent
     is_inside_given_folder = wp_content_root == cwd or cwd in wp_content_root.parents
     is_theme_of_wp_content_root = (
-        candidate.parent.name == "themes" and is_wordpress_theme(candidate) and (wp_content_root / "plugins").is_dir()
+        candidate.parent.name == "themes"
+        and is_wordpress_theme(candidate)
+        and is_directory(wp_content_root / "plugins")
     )
     return wp_content_root if is_theme_of_wp_content_root and is_inside_given_folder else candidate
 
@@ -306,7 +356,7 @@ def detect_tree_shape(site_root: Path) -> str:
         return "whole_tree"
     if requires_roots_wordpress(site_root) or has_bedrock_web_app_folder(site_root):
         return "bedrock"
-    if (site_root / "wp-config.php").is_file():
+    if is_regular_file(site_root / "wp-config.php"):
         return "whole_tree"
     if has_wp_content_folders(site_root):
         return "wp_content_only"
@@ -316,12 +366,18 @@ def detect_tree_shape(site_root: Path) -> str:
 
 
 def detect_app_and_shape(site_root: Path, has_git: bool, has_remote: bool) -> tuple[str | None, str]:
-    """The app, and the devsite-import git shape: no git and no origin outrank what the tree looks like."""
+    """The app, and the devsite-import git shape: no git and no origin outrank what the tree looks like.
+
+    Only WordPress has partial-tree shapes (Bedrock, wp-content, a theme); any other app's repo is
+    the whole tree, so "none" keeps meaning "no .git" for the skills that read it.
+    """
     app = detect_app(site_root)
     if not has_git:
         return app, "none"
     if not has_remote:
         return app, "no_remote"
+    if app is not None and app != "wordpress":
+        return app, "whole_tree"
     return app, detect_tree_shape(site_root)
 
 
@@ -331,7 +387,7 @@ def detect_docroot_guess(site_root: Path, app: str | None) -> str:
         return "public"
     if app == "phpapp":
         for docroot in INDEX_PHP_DOCROOTS:
-            if (site_root / docroot / "index.php").is_file():
+            if is_regular_file(site_root / docroot / "index.php"):
                 return docroot
     return ""
 
@@ -428,6 +484,14 @@ def read_php_version(site_root: Path) -> str | None:
     return version_line.group(1) if version_line else None
 
 
+def choose_folder_name(site_root: Path, cwd: Path) -> str:
+    """The folder given names the project (Local's <site>/app/public is named <site>), except a framework's
+    public/ promoted to its app root: "public" names nothing, so the app root's name is used."""
+    resolved_cwd = cwd.resolve()
+    resolved_site_root = site_root.resolve()
+    return resolved_site_root.name if resolved_site_root in resolved_cwd.parents else resolved_cwd.name
+
+
 def collect_facts(cwd: Path) -> dict:
     site_root = find_site_root(cwd)
     if site_root is None:
@@ -445,7 +509,7 @@ def collect_facts(cwd: Path) -> dict:
             "root_commit": facts_from_git["root_commit"],
             "branch": facts_from_git["branch"],
             "hostnames": hostnames_from(site_root),
-            "folder_name": cwd.resolve().name,
+            "folder_name": choose_folder_name(site_root, cwd),
             "app": app,
         },
         "shape": shape,
