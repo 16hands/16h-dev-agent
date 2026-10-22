@@ -62,9 +62,9 @@ secret lives in this repository.
    client, production, the devsites, the last push, errors in the last hour,
    and whether the site is reachable. Then it does what you asked.
 4. **When nothing on 16h matches**, the agent lists the sites you can see and
-   asks once which one this repo is. Your answer is remembered on 16h, by the
-   repo's git remote, not in the repo — so the next session, in either agent,
-   opens with the project named.
+   asks once which one this repo is. When the repo has a git remote, your
+   answer is remembered on 16h by that remote, not in the repo — so the next
+   session, in either agent, opens with the project named.
 
 ## Skills
 

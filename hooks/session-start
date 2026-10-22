@@ -2,7 +2,7 @@
 # SessionStart hook for the 16h-dev-agent plugin: injects the 'using-16h' skill
 # and, when the folder is a 16h site, that repo's facts and the one instruction.
 # Shape, escape_for_json and emit_json are copied from the superpowers 7.0.0
-# session-start hook (MIT).
+# session-start hook. MIT licence: hooks/LICENSE.superpowers.
 #
 # Never blocks a session: no `set -e`, every step that fails degrades to the
 # intro alone, and the exit status is 0 on every path. Writes no file, asks

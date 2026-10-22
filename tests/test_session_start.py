@@ -614,6 +614,13 @@ def test_the_hook_writes_nothing_and_is_fast(tmp_path):
     assert sorted(path.relative_to(tmp_path) for path in tmp_path.rglob("*")) == before
 
 
+def test_the_superpowers_licence_travels_with_the_code_copied_from_it():
+    licence_text = (HOOK.parent / "LICENSE.superpowers").read_text()
+    assert licence_text.startswith("MIT License") and "Copyright (c) 2025 Jesse Vincent" in licence_text
+    for copied_file in ("run-hook.cmd", "session-start"):
+        assert "MIT licence: hooks/LICENSE.superpowers" in (HOOK.parent / copied_file).read_text(), copied_file
+
+
 def test_hooks_json_matches_on_resume_and_compact():
     hooks = json.loads((HOOK.parent / "hooks.json").read_text())
     assert hooks["hooks"]["SessionStart"][0]["matcher"] == "startup|resume|clear|compact"

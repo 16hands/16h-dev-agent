@@ -47,7 +47,7 @@ REM exit code.
 exit /b %ERRORLEVEL%
 CMDBLOCK
 
-# Copied from superpowers 7.0.0 (MIT): hooks/run-hook.cmd.
+# Copied from superpowers 7.0.0: hooks/run-hook.cmd. MIT licence: hooks/LICENSE.superpowers.
 # Unix: run the named script directly
 # Splits $0 on its last / or \ (cmd passes Windows paths) instead of calling
 # dirname, and uses $BASH (bash's own absolute path, always set once bash is

@@ -21,6 +21,8 @@ The site is the `production` that `site_status` named, or the one the developer 
 
 ## 2. Plan
 
+A Laravel push runs no migrations. If the change adds one, say so and stop: running it is a job for the panel or 16Hands.
+
 `site_plan(client?, type: "production", site_key, app, local_facts)`, with `local_facts` collected as `pushing-to-staging` step 3 does. It returns `plan_id`, `what_will_change`, `questions`, `defaults`, `refusals`, `digest` and `uploads`: presigned POSTs for `code` on Laravel, and for `code`, `database` and `uploads` on WordPress. A plan lives 30 minutes.
 
 A refusal here names the gate, and the push stops until someone else moves it:

@@ -7,9 +7,9 @@ plausible causes actually happened, and there is usually more than one.
 
 Two things have to come out of the email before any tool runs.
 
-**Which site.** The client key is what `logs_read` takes; a client with more
-than one site says which site in the same breath. If the email names neither,
-ask — reading the wrong client's logs is both useless and recorded.
+**Which site.** `logs_read` takes the client key and the site's key; a client
+with more than one site says which site in the same breath. If the email names
+neither, ask — reading the wrong client's logs is both useless and recorded.
 
 **What window.** Ask for it if it is not there — "this morning" is not a
 window. Convert to minutes back from now and add slack on both sides:
@@ -25,7 +25,7 @@ narrow returns nothing and looks like "no error".
 ## 2. Read the errors
 
 ```
-logs_read(client: "<client key>", kind: "errors", minutes: <window>)
+logs_read(client: "<client key>", site: "<site_key>", kind: "errors", minutes: <window>)
 ```
 
 Entries come back newest first with `summary` (the first line), `message` (the

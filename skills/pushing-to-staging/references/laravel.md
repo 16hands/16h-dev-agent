@@ -21,7 +21,7 @@ defaults to yes.
 | Shape | Offer |
 |---|---|
 | `.git` with an `origin` | `git_pull` question, **default yes** — Laravel deploys are a code pull, the way everyone already runs them |
-| `.git`, no `origin` (`no_remote`) | one offer: create a repo on your GitHub? default no |
+| `.git`, no `origin` (`no_remote`) | say nothing about git; upload only |
 | no `.git` | say nothing about git; upload only |
 
 Answering yes to `git_pull` puts `git_repo_url` and the branch on the site row
