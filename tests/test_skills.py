@@ -42,6 +42,18 @@ def test_using_16h_fits_the_budget_and_carries_the_out_of_bounds_rule():
         assert skill in text
 
 
+def test_using_16h_and_the_readme_carve_out_env_16h_from_what_is_written_to_the_repo():
+    # Ruling P-R7: a framework push keeps .env.16h and its .gitignore line, so "nothing else is ever written"
+    # has to name it, and say it is never committed or quoted.
+    using_16h = (SKILLS / "using-16h" / "SKILL.md").read_text()
+    sentence = using_16h.split("Nothing else is ever written to the repo", 1)[1].split(". ", 1)[0]
+    assert "`.env.16h`" in sentence and "`.gitignore`" in sentence
+    assert "never committed" in sentence and "never quoted in a record or a message" in sentence
+    readme = " ".join((SKILLS.parent / "README.md").read_text().split())
+    passage = readme.split("A push also writes `.deployignore`", 1)[1].split("Nothing else is ever written to your repo", 1)[0]
+    assert "`.env.16h`" in passage and "never committed" in passage
+
+
 def test_using_16h_never_contains_the_hooks_project_block_marker():
     assert "## This project" not in (SKILLS / "using-16h" / "SKILL.md").read_text()
 

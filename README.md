@@ -97,8 +97,11 @@ Two skills leave a record in your repo:
 
 They are yours to commit or not, and the next session can read them. A push
 also writes `.deployignore`, the list of what the upload leaves out, yours to
-keep like a `.gitignore`. Nothing else is ever written to your repo, never a
-secret, and the plugin needs none of it to work.
+keep like a `.gitignore`. A Laravel, Statamic or Symfony push also keeps
+`.env.16h`, your own values for the devsite, and adds its one line to
+`.gitignore`: the file is never committed, and its values are never quoted in
+a record or a message. Nothing else is ever written to your repo, never a
+secret anywhere else, and the plugin needs none of it to work.
 
 ## What it deliberately cannot do
 
