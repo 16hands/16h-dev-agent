@@ -1,7 +1,7 @@
 {
   "name": "16h-dev-agent",
-  "description": "Your coding agent on the 16h platform: read a client's live errors, put a site running on your own machine onto a 16h devsite, push later changes to it. Production stays a person's click.",
-  "version": "1.2.0",
+  "description": "Your coding agent on the 16h platform: it knows which site this repo is, reads the live errors and traffic, pushes to staging, and releases to production behind the panel's toggle.",
+  "version": "2.0.0",
   "author": {
     "name": "16hands"
   },
@@ -15,6 +15,9 @@
     "devsite",
     "deploy",
     "logs",
-    "mcp"
+    "mcp",
+    "codex",
+    "staging",
+    "production"
   ]
 }
