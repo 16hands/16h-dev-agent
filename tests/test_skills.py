@@ -293,3 +293,17 @@ def test_files_build_block_names_its_folder_and_checks_index_html_before_zipping
     checks_index_html = build_block.index('[ -f "$site_folder/index.html" ]')
     zips = build_block.index('(cd "$site_folder" && zip')
     assert sets_folder < checks_index_html < zips
+
+
+def test_verifying_relays_each_new_push_progress_message_once_in_the_servers_words():
+    # While state is `pushing`, site_status's message changes as the server moves through its phases.
+    # The developer sees each new one, in one line, and nothing when it has not changed.
+    body = (SKILLS / "verifying-a-deploy" / "SKILL.md").read_text()
+    pushing_row = next(line for line in body.splitlines() if line.startswith("| `pushing` |"))
+    assert "when `message` changes, show it in one line" in pushing_row
+    paragraph = body.split("`wp_admin_login_url` comes after", 1)[0].split("|\n\n", 1)[1]
+    for phase in ("unpacking", "scanning", "migrations", "switching"):
+        assert phase in paragraph
+    assert "server's own words" in paragraph and "say nothing" in paragraph and "about a minute" in paragraph
+    # No promise about later pushes: the file manifest is not built.
+    assert "faster" not in paragraph and "next push" not in paragraph and "later push" not in paragraph
