@@ -137,6 +137,8 @@ curl -s -o /dev/null -w '%{http_code}\n' "$env_upload_url" \
 
 `204` is success. URLs live one hour; caps are code 2 GiB, database 1 GiB, uploads 2 GiB, env 64 KiB — over cap, answer no to that part and re-plan. Once every part has answered `204`, delete the folder: `rm -rf "$parts_folder"`.
 
+**Secrets never go in `.env.16h`.** A key that is a secret — an API key, a token, a licence, a DSN with a password in it — goes into the platform's secret store with `env_set(site_key, key, value)` (or `16h env set` at a terminal), once, and the platform writes it into the site's `.env` within seconds and on every push after that; `env_unset` removes it and `env_list` shows names and fingerprints, never a value. `.env.16h` is for the non-secret keys the app needs (feature flags, a public URL, a mail from-name). A value you pass to `env_set` is in this conversation because the developer typed it here: say so before asking for one, and never read a value out of a file into that call unless they asked you to. The push report names any `.env.16h` key that looks like a secret, and any key a stored secret shadowed — move the first with `env_set` and delete it from `.env.16h`; the second is already the store's.
+
 ## Step 7 — push, then verify
 
 A new site takes a push once `site_status(site_key)` says `accepted`. `requested` means the site and its database are still being made; `refused` means they will not be — read `message`, re-plan or stop.
