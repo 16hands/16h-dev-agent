@@ -18,7 +18,7 @@ A push is done when `site_status` says `applied` and the site answers, not when 
 | `accepted` | site and database exist | upload, then `site_push` |
 | `refused` | creation was refused | read `message`; re-plan or stop |
 | `pushing` | the deploy lane is running | keep polling; when `message` changes, show it in one line |
-| `applied` | live on `url` | step 2 |
+| `applied` | live on `url`; `release` names the release it made live | step 2 |
 | `failed` | the lane stopped; the previous release still serves | read `message` verbatim; fix; push again |
 
 While `pushing`, the server reports its phases (unpacking, scanning, migrations, switching) in `message`: show each new one to the developer once, in the server's own words, and say nothing when it has not changed. The scan of a big `vendor/` takes about a minute, so a long "Scanning" line is the server working, not stuck.
@@ -40,6 +40,14 @@ Once `applied`, one `site_status(site_key)` without `task_id`, and read two answ
 After a production push, read both again five minutes after `applied`: a fault that needs real traffic shows by then.
 
 Then tell the developer: the URL, the `http` answer, the errors, and the wp-admin link when there is one.
+
+## 3. New content, old code
+
+A page the push added that answers 500 for a template or blueprint it cannot find, or a new route that answers 404, while the new content is there, can mean a server is still running the previous release. Check before calling it your bug: each error's path names the release it ran from (`…/releases/20261110-022817/…`); compare it with the poll's `release`.
+
+- **The release the push applied:** the fault is in the push. `debugging-a-live-site`.
+- **An older release, within a minute of `applied`:** the servers are still switching. Read the errors again in thirty seconds.
+- **An older release a minute or more after `applied`:** the platform's fault, not the code's. **Do not push again**: a second push lands the same way. Tell the developer in one line: the release the push applied, the release the errors name, the `node`s they came from, and that it is for 16hands to fix.
 
 ## Checking over HTTP yourself
 

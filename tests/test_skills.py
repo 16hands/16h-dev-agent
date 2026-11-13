@@ -307,3 +307,17 @@ def test_verifying_relays_each_new_push_progress_message_once_in_the_servers_wor
     assert "server's own words" in paragraph and "say nothing" in paragraph and "about a minute" in paragraph
     # No promise about later pushes: the file manifest is not built.
     assert "faster" not in paragraph and "next push" not in paragraph and "later push" not in paragraph
+
+
+def test_verifying_tells_an_old_release_from_a_bug_and_never_pushes_again_for_it():
+    # FlyAway devsite, 2026-11-12: the push applied, every node still ran the last release, and the
+    # agent pushed a second time. The poll's `release` and the release in an error's path tell the two apart.
+    body = (SKILLS / "verifying-a-deploy" / "SKILL.md").read_text()
+    applied_row = next(line for line in body.splitlines() if line.startswith("| `applied` |"))
+    assert "`release`" in applied_row
+    section = body.split("## 3. New content, old code", 1)[1].split("\n## ", 1)[0]
+    assert "releases/" in section and "`release`" in section
+    assert "**Do not push again**" in section
+    assert "16hands" in section
+    debugging = (SKILLS / "debugging-a-live-site" / "SKILL.md").read_text()
+    assert "`verifying-a-deploy` §3" in debugging

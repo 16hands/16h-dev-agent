@@ -1,6 +1,6 @@
 {
   "name": "16h-dev-agent",
-  "version": "2.1.1",
+  "version": "2.2.0",
   "description": "Your coding agent on the 16h platform: it knows which site this repo is, reads the live errors and traffic, pushes to staging, and releases to production behind the panel's toggle.",
   "author": {
     "name": "16hands"
