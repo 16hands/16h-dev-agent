@@ -1,7 +1,7 @@
 {
   "$schema": "https://anthropic.com/claude-code/marketplace.schema.json",
   "name": "16hands",
-  "description": "Plugins from 16Hands for working on sites hosted on the 16h platform.",
+  "description": "Plugins from 16hands for working on sites hosted on the 16h platform.",
   "owner": {
     "name": "16hands"
   },
@@ -9,7 +9,7 @@
     {
       "name": "16h-dev-agent",
       "description": "Your coding agent on the 16h platform: it knows which site this repo is, reads the live errors and traffic, pushes to staging, and releases to production behind the panel's toggle.",
-      "version": "2.1.1",
+      "version": "2.2.0",
       "source": "./",
       "category": "Productivity",
       "homepage": "https://16h.io",

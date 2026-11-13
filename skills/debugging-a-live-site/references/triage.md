@@ -32,7 +32,7 @@ Entries come back newest first with `summary` (the first line), `message` (the
 full trace, truncated) and `node`. Read every `summary` first and count them —
 one exception ten thousand times and ten exceptions once are different
 problems. The same error on every node is code or data; on one node it is that
-machine, and that is a 16Hands job, not a code change.
+machine, and that is a 16hands job, not a code change.
 
 ## 3. Read the kind the report is about
 

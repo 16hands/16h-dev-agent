@@ -3,7 +3,7 @@ from pathlib import Path
 
 PLUGIN_ROOT = Path(__file__).resolve().parents[1]
 PLUGIN_NAME = "16h-dev-agent"
-PLUGIN_VERSION = "2.1.1"
+PLUGIN_VERSION = "2.2.0"
 
 
 def read_json(relative_path):
@@ -65,7 +65,7 @@ def test_the_codex_manifest_carries_the_claude_manifests_identity():
 def test_the_native_marketplace_entry_names_the_plugin_at_the_repo_root():
     native_marketplace = read_json(".agents/plugins/marketplace.json")
     assert native_marketplace["name"] == "16hands"
-    assert native_marketplace["interface"] == {"displayName": "16Hands"}
+    assert native_marketplace["interface"] == {"displayName": "16hands"}
     [native_entry] = native_marketplace["plugins"]
     assert native_entry == {
         "name": PLUGIN_NAME,
