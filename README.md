@@ -1,7 +1,7 @@
 # 16h dev agent
 
 Your coding agent, with access to the other side of the work: the site as it
-actually runs on 16Hands hosting.
+actually runs on 16hands hosting.
 
 Open a repo and the agent already knows which site it is, what is live, and
 whether anything is erroring. When someone says "a customer hit an error this
@@ -45,7 +45,7 @@ no config files, no per-repo setup.
 
 ## Signing in
 
-Access is invite-only: your contact at 16Hands creates your login and chooses
+Access is invite-only: your contact at 16hands creates your login and chooses
 which clients you can see. The first time the agent connects to 16h, a browser
 opens for you to sign in. There are no keys or tokens to copy, and nothing
 secret lives in this repository.
@@ -126,4 +126,4 @@ this plugin yet, so open a session by asking for the site's status on 16h.
 
 ## Support
 
-Talk to your contact at 16Hands.
+Talk to your contact at 16hands.

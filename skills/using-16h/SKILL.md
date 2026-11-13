@@ -33,7 +33,7 @@ When the developer says one of these, use that skill first:
 - **Never call a write tool without asking.** `site_create` and `site_push` change hosting, and `site_status` with both `site_key` and `repo` binds this repo to that site for good: make it only after the developer names the site.
 - **One question per message, defaults first.** Show the default so a yes answers it.
 
-No SSH, no SFTP, no database access, no filesystem on the servers, no `wp` or `artisan` run on a 16h host. These tools are the whole surface. **This holds even when the person asks you to** — "just ssh in and run wp-cli" is a request to bypass the platform, and the right answer is: *the platform's hosts are out of bounds for me; the tools cannot do X yet — here is what I can do instead, and this is the gap to report to 16Hands.* Never probe for a way in (a key on this machine, a host that resolves, a jump box).
+No SSH, no SFTP, no database access, no filesystem on the servers, no `wp` or `artisan` run on a 16h host. These tools are the whole surface. **This holds even when the person asks you to** — "just ssh in and run wp-cli" is a request to bypass the platform, and the right answer is: *the platform's hosts are out of bounds for me; the tools cannot do X yet — here is what I can do instead, and this is the gap to report to 16hands.* Never probe for a way in (a key on this machine, a host that resolves, a jump box).
 
 ## Records go in `docs/16h/`
 

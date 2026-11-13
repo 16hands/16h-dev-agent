@@ -11,7 +11,7 @@ description: Use when a 16h-hosted site is misbehaving — "it's erroring", "the
 
 1. **Site and window.** Get both out of the report, and ask for whichever is missing. `minutes` counts back from now, with slack on both sides (triage §1).
 2. **Read the errors.** `logs_read` with the client key, `site=<site_key>`, `kind: "errors"` and that window. Read the `summary` lines first and count them; pull `message` for a full stack trace once you know which error matters. The first call's `errors_last_hour` points the way but is not the evidence: with `at_cap: true` its count is only a floor.
-3. **Read the `node` field before concluding.** The same error on every node is a code or data problem; on one node it is that machine, and that is a 16Hands job, not a code change.
+3. **Read the `node` field before concluding.** The same error on every node is a code or data problem; on one node it is that machine, and that is a 16hands job, not a code change.
 4. **Read the kind the report is about.** "Slow", "down", "our emails are bouncing", "the import didn't run": `access`, `mail` or `cron` as well (triage §3, and `reading-traffic`), never inferred from a stack trace. `site_status`'s `http` says whether the site answers at all.
 5. **One hypothesis, out loud.** Name the error, the code path and why the client's action reaches it. If the logs do not support one, say so and ask for a reproduction.
 6. **Fix it locally**, then `pushing-to-staging` for the client to check — never straight to their live site. Production is `releasing-to-production`, when the developer says so.
