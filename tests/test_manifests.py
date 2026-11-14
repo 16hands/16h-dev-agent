@@ -3,7 +3,7 @@ from pathlib import Path
 
 PLUGIN_ROOT = Path(__file__).resolve().parents[1]
 PLUGIN_NAME = "16h-dev-agent"
-PLUGIN_VERSION = "2.2.0"
+PLUGIN_VERSION = "2.2.1"
 
 
 def read_json(relative_path):
@@ -14,12 +14,28 @@ def marketplace_entry():
     return read_json(".claude-plugin/marketplace.json")["plugins"][0]
 
 
-def test_the_three_manifests_agree_on_name_and_version():
+def test_the_two_plugin_manifests_carry_the_version_and_all_three_the_name():
     claude_manifest = read_json(".claude-plugin/plugin.json")
     codex_manifest = read_json(".codex-plugin/plugin.json")
     entry = marketplace_entry()
-    assert claude_manifest["version"] == codex_manifest["version"] == entry["version"] == PLUGIN_VERSION
+    assert claude_manifest["version"] == codex_manifest["version"] == PLUGIN_VERSION
     assert claude_manifest["name"] == codex_manifest["name"] == entry["name"] == PLUGIN_NAME
+
+
+def test_the_marketplace_entry_carries_no_version():
+    # Claude Code takes the version from plugin.json first and ignores the
+    # entry's without a warning, so a bump made only in the entry would never
+    # reach anyone. One place to bump: the two plugin.json files.
+    assert "version" not in marketplace_entry()
+
+
+def test_the_readme_tells_claude_code_users_to_turn_on_auto_update():
+    # Background auto-update is off for a third-party marketplace until the
+    # user turns it on, and marketplace.json has no field to do it for them.
+    readme_text = (PLUGIN_ROOT / "README.md").read_text()
+    install_section = readme_text.split("## Install", 1)[1].split("\n## ", 1)[0]
+    assert "Enable auto-update" in install_section
+    assert "/plugin marketplace update 16hands" in install_section
 
 
 def test_the_marketplace_entry_carries_what_codex_requires():

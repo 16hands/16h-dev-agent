@@ -62,12 +62,31 @@ except Exception:
 
 write_project_block_program='
 import json
+import os
 import sys
+
+
+def read_plugin_version(plugin_root):
+    # site_status compares this with the newest release and tells the
+    # developer when theirs is behind. No manifest, or no version string in
+    # it, sends the block without one.
+    try:
+        manifest_path = os.path.join(plugin_root, ".claude-plugin", "plugin.json")
+        with open(manifest_path, encoding="utf-8") as manifest_file:
+            plugin_version = json.load(manifest_file).get("version")
+        return plugin_version if isinstance(plugin_version, str) and plugin_version else None
+    except Exception:
+        return None
+
 
 try:
     facts = json.load(sys.stdin)
     if facts.get("is_site") is True:
-        repo_json = json.dumps(facts["repo"], indent=2)
+        repo_block = dict(facts["repo"])
+        plugin_version = read_plugin_version(sys.argv[1])
+        if plugin_version:
+            repo_block["plugin_version"] = plugin_version
+        repo_json = json.dumps(repo_block, indent=2)
         working_tree = "dirty" if facts.get("dirty") else "clean"
         shape = facts.get("shape") or "unknown"
         local_php = facts.get("php") or "unknown"
@@ -96,7 +115,7 @@ if command -v python3 >/dev/null 2>&1; then
     working_directory="$cwd_from_input"
   fi
   recon_json="$(python3 -I "${SCRIPT_DIR}/recon.py" "$working_directory" 2>/dev/null)"
-  project_block="$(printf '%s' "$recon_json" | python3 -I -c "$write_project_block_program" 2>/dev/null)"
+  project_block="$(printf '%s' "$recon_json" | python3 -I -c "$write_project_block_program" "$PLUGIN_ROOT" 2>/dev/null)"
 fi
 
 # Escape string for JSON embedding using bash parameter substitution.

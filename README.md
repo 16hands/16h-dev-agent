@@ -23,6 +23,13 @@ In Claude Code:
 /plugin install 16h-dev-agent@16hands
 ```
 
+Then turn on auto-update, so each new version reaches you on its own:
+`/plugin` → **Marketplaces** → **16hands** → **Enable auto-update**. Claude
+Code leaves it off for a marketplace like this one until you turn it on.
+Without it you get a new version only when you run
+`/plugin marketplace update 16hands`. Either way, the agent tells you when the
+version you run is behind.
+
 For Codex, in your terminal:
 
 ```

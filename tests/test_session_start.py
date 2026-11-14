@@ -799,6 +799,32 @@ def test_the_hook_injects_the_intro_and_the_project_block(tmp_path):
     assert "first tool call on any 16h task is site_status" in context
 
 
+def project_repo_block(context):
+    block_text = context.split("## This project\n\n```json\n", 1)[1].split("\n```", 1)[0]
+    return json.loads(block_text)
+
+
+def test_the_repo_block_carries_the_installed_plugin_version_for_site_status(tmp_path):
+    # site_status compares it with the newest release and tells the developer
+    # when theirs is behind: a marketplace like ours does not auto-update by default.
+    make_wordpress(tmp_path)
+    repo_block = project_repo_block(injected_context(tmp_path))
+    manifest_version = json.loads((HOOK.parents[1] / ".claude-plugin" / "plugin.json").read_text())["version"]
+    assert list(repo_block) == REPO_KEYS + ["plugin_version"]
+    assert repo_block["plugin_version"] == manifest_version
+
+
+@pytest.mark.parametrize("manifest_text", [None, "not json", '{"version": 7}', '{"version": ""}'])
+def test_a_plugin_whose_manifest_gives_no_version_sends_the_repo_block_without_one(tmp_path, manifest_text):
+    make_wordpress(tmp_path / "site")
+    hook = copy_plugin(tmp_path / "plugin", with_recon=True, with_skill=True)
+    if manifest_text is not None:
+        (tmp_path / "plugin" / ".claude-plugin").mkdir()
+        (tmp_path / "plugin" / ".claude-plugin" / "plugin.json").write_text(manifest_text)
+    context = run_hook(tmp_path / "site", hook=hook)["hookSpecificOutput"]["additionalContext"]
+    assert list(project_repo_block(context)) == REPO_KEYS
+
+
 def test_a_non_site_gets_the_intro_alone(tmp_path):
     make_not_a_site(tmp_path)
     context = injected_context(tmp_path)
