@@ -25,6 +25,8 @@ The site is the `production` that `site_status` named, or the one the developer 
 
 `site_plan(client?, type: "production", site_key, app, local_facts)`, with `local_facts` collected as `pushing-to-staging` step 3 does. It returns `plan_id`, `what_will_change`, `questions`, `defaults`, `refusals`, `digest` and `uploads`: presigned POSTs for `code`, `database` and `uploads`. A plan lives 30 minutes.
 
+**Show the tree.** `site_plan` returns `tree`, the steps this push will run in order. Show it to the developer once, verbatim, in a code block, before the questions: it is the plan, the way plan mode shows one. `steps` is the same list as data; a `gate` always runs. Here, show it before the confirmation.
+
 A refusal here names the gate, and the push stops until someone else moves it:
 
 - `agent pushes to <site> are off — the site's owner turns them on in the panel`

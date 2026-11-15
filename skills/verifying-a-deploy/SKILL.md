@@ -23,6 +23,8 @@ A push is done when `site_status` says `applied` and the site answers, not when 
 
 While `pushing`, the server reports its phases (unpacking, scanning, migrations, switching) in `message`: show each new one to the developer once, in the server's own words, and say nothing when it has not changed. The scan of a big `vendor/` takes about a minute, so a long "Scanning" line is the server working, not stuck.
 
+While `pushing`, `steps` holds each step's state (`waiting`, `started`, `finished`, `failed`, `warned`, `off`). Keep showing `message` as above; when a step turns `failed`, name it beside `message`.
+
 `wp_admin_login_url` comes after a WordPress push has `applied`, only to the identity that pushed, and it is one-shot: hand it over, do not open it yourself, and do not repeat it later. While `message` says the login is being minted, ask again in about twenty seconds.
 
 ## 2. Read the site

@@ -321,3 +321,11 @@ def test_verifying_tells_an_old_release_from_a_bug_and_never_pushes_again_for_it
     assert "16hands" in section
     debugging = (SKILLS / "debugging-a-live-site" / "SKILL.md").read_text()
     assert "`verifying-a-deploy` §3" in debugging
+
+
+def test_the_push_skills_show_the_tree_and_the_poll_its_steps():
+    # Deploy system phase 2: site_plan returns the push's step tree, shown to
+    # the developer before the questions, and the push poll each step's state.
+    for push_skill in ("pushing-to-staging", "releasing-to-production"):
+        assert "`tree`" in (SKILLS / push_skill / "SKILL.md").read_text(), push_skill
+    assert "`steps` holds each step's state" in (SKILLS / "verifying-a-deploy" / "SKILL.md").read_text()

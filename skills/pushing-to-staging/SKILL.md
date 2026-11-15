@@ -89,6 +89,8 @@ The name comes from `folder_name`. A taken one is refused with two others — `n
 
 ## Step 4 — ask the plan's questions, then create
 
+**Show the tree.** `site_plan` returns `tree`, the steps this push will run in order. Show it to the developer once, verbatim, in a code block, before the questions: it is the plan, the way plan mode shows one. `steps` is the same list as data; a `gate` always runs.
+
 - `site_name` — `<slug>.devsite.co.nz`, and `php` — the pool (not asked for `files`)
 - WordPress: `include_database`, and `include_uploads` — `wp-content/uploads`, size shown
 - WordPress: `rewrite_urls` — the local URL → the devsite URL
@@ -155,7 +157,7 @@ A new site takes a push once `site_status(site_key)` says `accepted`. `requested
 Same verbs, one more argument. **Never plan by folder name for a site that is already there** — that refuses `name … is taken`, which is true and useless.
 
 1. `site_plan(app, local_facts, site_key="<the devsite>")` → a plan with `kind: "update"` and its own `uploads` map. The name and the PHP version are the site's and are not asked.
-2. Ask what it asks. On WordPress, `include_database` defaults to **no** and its text carries the warning above — read it out; `include_uploads` appears only when you have uploads; `rewrite_urls` only when your local URL differs. Statamic asks `include_content` again; the other apps ask nothing.
+2. Show its `tree` as step 4 says, then ask what it asks. On WordPress, `include_database` defaults to **no** and its text carries the warning above — read it out; `include_uploads` appears only when you have uploads; `rewrite_urls` only when your local URL differs. Statamic asks `include_content` again; the other apps ask nothing.
 3. Build and upload the parts answered yes (steps 5 and 6), and a framework app's env part on every push, since the platform rewrites `.env` each time. The POSTs came back with the plan, and `site_create` here is refused with `plan … updates an existing site — call site_push`.
 4. `site_push(site_key, plan_id, parts, answers)` — **every** answer, or it refuses and names the missing one; `database` in `parts` needs `include_database: true`. Then `verifying-a-deploy`, as above.
 
