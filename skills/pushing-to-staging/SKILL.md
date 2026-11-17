@@ -152,6 +152,8 @@ A new site takes a push once `site_status(site_key)` says `accepted`. `requested
 
 `site_push(site_key, plan_id, parts)` — `parts` names what reached its POST: `code`, plus `env` when you built one (Symfony always does), and `database` or `uploads` only on WordPress. It returns a `task_id`. Then `verifying-a-deploy`: it polls with that `task_id`, reads every `state`, and hands back the URL and, for WordPress, the one-shot wp-admin login.
 
+When a push comes back failed with deploy_state flipped_back, or the developer says the site broke after a push: read the error with logs_read, then offer the three moves in plain words — push a fix, roll back the code, or roll back code, database and files (site_plan with rollback=true, read what_will_change to them, then site_push with parts=[]).
+
 ## Push a later change to a devsite that exists
 
 Same verbs, one more argument. **Never plan by folder name for a site that is already there** — that refuses `name … is taken`, which is true and useless.

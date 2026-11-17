@@ -3,7 +3,7 @@ from pathlib import Path
 
 PLUGIN_ROOT = Path(__file__).resolve().parents[1]
 PLUGIN_NAME = "16h-dev-agent"
-PLUGIN_VERSION = "2.3.0"
+PLUGIN_VERSION = "2.4.0"
 
 
 def read_json(relative_path):
