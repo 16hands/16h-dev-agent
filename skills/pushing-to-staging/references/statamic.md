@@ -66,12 +66,20 @@ Show the file and ask which values the devsite needs; the developer's answers
 go in this file and nowhere else. Copy it into the parts folder on **every**
 push: the platform rewrites `.env` each time, so a push without it drops its keys.
 
+`LOG_LEVEL` is one of the platform's keys: `debug` on a devsite, `warning` on
+production by design. To keep `info` lines on production, log them to a channel
+of your own in `config/logging.php` (`'driver' => 'single'`, `'level' => 'info'`,
+`'path' => storage_path('logs/laravel.log')`, the one log file every server can
+write), never by raising `LOG_LEVEL`.
+
 ## `.deployignore`
 
 ```
 node_modules/*
 storage/logs/*.log
+storage/forms/*
 bootstrap/cache/*.php
+database/*.sqlite*
 public/hot
 public/storage/*
 .env
@@ -89,7 +97,9 @@ docs/16h/*
 |---|---|
 | `node_modules/*` | build input only |
 | `storage/logs/*.log` | local logs; the folder itself travels |
+| `storage/forms/*` | form submissions made locally: the site's own are kept on the server, and a local copy can hold real people's details |
 | `bootstrap/cache/*.php` | a `config:cache` file is the local `.env` frozen into PHP, and it would win over the platform's |
+| `database/*.sqlite*` | a local SQLite database and its `-wal`/`-shm` files: the platform's database is MySQL, so the file is only local data riding along |
 | `public/hot` | laravel-vite-plugin writes it while `npm run dev` runs and `npm run build` does not remove it; in the release, `Vite::isRunningHot()` points every asset at `localhost:5173` and the devsite has no CSS or JS |
 | `public/storage/*` | the `storage:link` symlink: zip follows it and packs a real folder, which the platform's `storage:link --force` cannot replace, so the devsite serves the old local copies and new uploads 404 |
 | `.env` | never travels in the zip: the platform writes its own on every push |
@@ -134,5 +144,5 @@ There is no `database` part: a database import is WordPress-only in this wave.
   (or at the log, until the catcher is live).
 - Later changes: the *later* path in `SKILL.md`. Its plan asks
   `include_content` again on every push; read it out.
-- Rolling back a devsite is pushing the previous code again.
+- Rolling back: `site_plan` with `rollback=true`, as `SKILL.md`'s *Roll back* says.
 - Production pushes are WordPress-only in this wave.

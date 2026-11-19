@@ -126,5 +126,5 @@ import is WordPress-only in this wave.
 - Mail never reaches a real inbox: `MAILER_DSN` is the mail catcher, or
   `null://null` until the catcher is live.
 - Later changes: the *later* path in `SKILL.md`, both parts every time.
-- Rolling back a devsite is pushing the previous code again.
+- Rolling back: `site_plan` with `rollback=true`, as `SKILL.md`'s *Roll back* says.
 - Production pushes are WordPress-only in this wave.

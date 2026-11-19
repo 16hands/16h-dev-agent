@@ -25,10 +25,9 @@ is Statamic: read `statamic.md` instead.
 | `.git`, no `origin` (`no_remote`) | never asks: upload only, and say nothing about git |
 | no `.git` | never asks: upload only, and say nothing about git |
 
-Answering yes to `git_pull` puts `git_repo_url` and the branch on the site row
-and returns the public half of the client's deploy key for you to add to the
-repo. It does not replace this first upload — the upload is what gets the app
-running; the pull lane serves the ones after it.
+A yes to `git_pull` puts `git_repo_url` and the branch on the site row and
+returns the public half of the client's deploy key to add to the repo. The first
+upload still runs: it gets the app going, and the pull lane serves the rest.
 
 ## Local facts
 
@@ -44,8 +43,7 @@ git_remote_url="$(git remote get-url origin 2>/dev/null)"
 git_branch="$(git rev-parse --abbrev-ref HEAD 2>/dev/null)"
 ```
 
-- `siteurl` is `APP_URL`. If tinker is unavailable, read `APP_URL` from `.env`
-  — **read it, never upload it**.
+- `siteurl` is `APP_URL`; without tinker, read it from `.env` — **never upload it**.
 - `uploads_size_bytes` has no Laravel meaning: leave it out. Public user media
   under `storage/app/public` travels once, inside `storage/` on the first
   push; after that the platform keeps its own copy. Say so if the app has any.
@@ -74,6 +72,10 @@ grep -qxF '.env.16h' .gitignore 2>/dev/null || printf '\n.env.16h\n' >> .gitigno
 Show the file and ask which values the devsite needs; the developer's answers
 go in this file and nowhere else. Copy it into the parts folder on **every**
 push: the platform rewrites `.env` each time, so a push without it drops its keys.
+`LOG_LEVEL` is one of the platform's keys: `debug` on a devsite, `warning` on production
+by design. To keep `info` lines on production, log them to a channel of your own in
+`config/logging.php` (`'driver' => 'single'`, `'level' => 'info'`, `'path' => storage_path('logs/laravel.log')`,
+the one log file every server can write), never by raising `LOG_LEVEL`.
 
 ## `.deployignore`
 
@@ -81,6 +83,7 @@ push: the platform rewrites `.env` each time, so a push without it drops its key
 node_modules/*
 storage/logs/*.log
 bootstrap/cache/*.php
+database/*.sqlite*
 public/hot
 public/storage/*
 .env
@@ -99,6 +102,7 @@ docs/16h/*
 | `node_modules/*` | build input only |
 | `storage/logs/*.log` | local logs: weight, and whatever the app wrote to them. The folder itself travels |
 | `bootstrap/cache/*.php` | a `config:cache` file is the local `.env` frozen into PHP, and it would win over the platform's. Laravel rebuilds the manifests; the folder itself travels |
+| `database/*.sqlite*` | a local SQLite database and its `-wal`/`-shm` files (Laravel's default since 11): the platform's database is MySQL, so the file is only local data riding along. `database/migrations` travels |
 | `public/hot` | laravel-vite-plugin writes it while `npm run dev` runs and `npm run build` does not remove it; in the release, `Vite::isRunningHot()` points every asset at `localhost:5173` and the devsite has no CSS or JS |
 | `public/storage/*` | the `storage:link` symlink: zip follows it and packs a real folder, which the platform's `storage:link --force` cannot replace, so the devsite serves the old local copies and new uploads 404 |
 | `.env` | never travels in the zip. The platform writes `.env` on every push from the site row, the app key it keeps for the site, the database it made, and the mail catcher; keys only this app knows go in `.env.16h` (above) |
@@ -145,14 +149,11 @@ no seeder runs, so seed data the site needs arrives through a migration.
 
 ## After `applied`
 
-- No `wp_admin_login_url` — that is WordPress-only. `site_status` returns the
-  URL and, when the deploy failed, the lane's own message.
+- No `wp_admin_login_url` — that is WordPress-only.
 - The platform runs `migrate --force` and `storage:link` inside the release before the flip; a failing migration stops the push and the report carries its output.
 - Mail never reaches a real inbox: the platform points it at its mail
   catcher (or at the log, until the catcher is live).
-- Later changes: the *later* path in `SKILL.md` — `site_plan` with
-  `site_key`, rebuild `code.zip` and `env.16h` in a fresh parts folder, and
-  `site_push(parts, answers)` with `parts` as above; or,
-  if the dev said yes to `git_pull`, let the pull lane serve it.
-- Rolling back a devsite is pushing the previous code again.
+- Later changes: the *later* path in `SKILL.md`, with `code.zip` and `env.16h`
+  rebuilt in a fresh parts folder; or, after a yes to `git_pull`, the pull lane.
+- Rolling back: `site_plan` with `rollback=true`, as `SKILL.md`'s *Roll back* says.
 - Production pushes are WordPress-only in this wave.

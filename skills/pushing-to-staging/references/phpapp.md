@@ -107,5 +107,5 @@ statamic and symfony — this is a phpapp site`), and so is a database part.
 - No `wp_admin_login_url` — that is WordPress-only.
 - Later changes: the *later* path in `SKILL.md`. Its plan asks nothing; the
   docroot is the one chosen at create.
-- Rolling back a devsite is pushing the previous code again.
+- Rolling back: `site_plan` with `rollback=true`, as `SKILL.md`'s *Roll back* says.
 - Production pushes are WordPress-only in this wave.

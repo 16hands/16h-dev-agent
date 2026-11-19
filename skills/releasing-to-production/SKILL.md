@@ -62,4 +62,4 @@ Refused at push time:
 
 ## 5. The release note
 
-After `applied`, write `docs/16h/releases/<YYYY-MM-DD>-<site_key>.md` from `references/release-note.md` and tell the developer its path. It records the digest, the `what_will_change` the developer heard, and `verifying-a-deploy`'s `http` and `errors_last_hour` answers against step 1's. A push that ends `failed` leaves the previous release serving and writes no note: read its `message` out.
+After `applied`, write `docs/16h/releases/<YYYY-MM-DD>-<site_key>.md` from `references/release-note.md` and tell the developer its path. It records the digest, the `what_will_change` the developer heard, and `verifying-a-deploy`'s `http` and `errors_last_hour` answers against step 1's. A push that ends `failed` leaves the previous release serving and writes no note: read its `message` out. When it failed with `deploy_state: flipped_back`, or the site broke after it, the moves are `pushing-to-staging`'s *Roll back*: plan with `type: "production"`, and a database rollback is refused while rows may be lost.

@@ -15,7 +15,7 @@ Before anything else on a 16h task, call `site_status` with the JSON block under
 - **It answers `project: null` with `candidates`.** Show them and ask once which site this repo is; never guess. When they name one, call `site_status(site_key=<that site>, repo=<the same block>)`: when the repo has a git remote, the platform remembers it as that site's and no later session asks again.
 - **They name a site that is not this repo** ("what's happening on acme.co.nz?"): `site_status(site_key=…)` alone, no `repo`, so nothing is remembered.
 
-Reading the answer: `before_production` is the site a change goes to before it goes live; `null` means create a devsite. `http.blocked_at_waf: true` means the WAF answered, not the site. `errors_last_hour: null` means the platform could not scan, not that there were none.
+Reading the answer: `before_production` is the site a change goes to first; `null` means create a devsite. `http.blocked_at_waf: true` means the WAF answered, not the site. `errors_last_hour: null` means the platform could not scan, not that there were none.
 
 ## Skills by moment
 
@@ -23,7 +23,7 @@ When the developer says one of these, use that skill first:
 
 - `debugging-a-live-site` — "it's erroring", "the site is down", "slow", "500", "customers can't check out", "a client emailed"
 - `reading-traffic` — "who's hitting the site", "is it a bot", "what happened at 2pm", "are our emails going out", "did the cron run"
-- `pushing-to-staging` — "put this on staging", "push my changes", "give me a devsite", "I want to see it before it goes live"
+- `pushing-to-staging` — "put this on staging", "push my changes", "give me a devsite", "I want to see it before it goes live", "roll it back"
 - `releasing-to-production` — "deploy to prod", "go live", "ship it", "push to production"
 - `verifying-a-deploy` — after any push, and "is it up?", "did that work?"
 

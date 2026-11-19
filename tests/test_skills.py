@@ -229,10 +229,12 @@ def test_releasing_says_production_is_wordpress_only():
 
 
 PINNED_DEPLOYIGNORE = {
-    "laravel.md": ["node_modules/*", "storage/logs/*.log", "bootstrap/cache/*.php", "public/hot", "public/storage/*",
-                   ".env", ".env.16h", ".env.*", "auth.json", ".git/*", "docs/16h/*", "*.sql", "*.sql.gz", "*.zip"],
-    "statamic.md": ["node_modules/*", "storage/logs/*.log", "bootstrap/cache/*.php", "public/hot", "public/storage/*",
-                    ".env", ".env.16h", ".env.*", "auth.json", ".git/*", "docs/16h/*", "*.sql", "*.sql.gz", "*.zip"],
+    "laravel.md": ["node_modules/*", "storage/logs/*.log", "bootstrap/cache/*.php", "database/*.sqlite*", "public/hot",
+                   "public/storage/*", ".env", ".env.16h", ".env.*", "auth.json", ".git/*", "docs/16h/*", "*.sql", "*.sql.gz",
+                   "*.zip"],
+    "statamic.md": ["node_modules/*", "storage/logs/*.log", "storage/forms/*", "bootstrap/cache/*.php", "database/*.sqlite*",
+                    "public/hot", "public/storage/*", ".env", ".env.16h", ".env.*", "auth.json", ".git/*", "docs/16h/*",
+                    "*.sql", "*.sql.gz", "*.zip"],
     "symfony.md": ["node_modules/*", "var/cache/*", "var/log/*", ".env", ".env.16h", ".env.*", ".env.local.php",
                    "auth.json", ".git/*", "docs/16h/*", "*.sql", "*.sql.gz", "*.zip"],
     "phpapp.md": ["node_modules/*", ".env", ".env.16h", ".env.*", "auth.json", ".git/*", "docs/16h/*", "*.sql", "*.sql.gz",
@@ -329,3 +331,78 @@ def test_the_push_skills_show_the_tree_and_the_poll_its_steps():
     for push_skill in ("pushing-to-staging", "releasing-to-production"):
         assert "`tree`" in (SKILLS / push_skill / "SKILL.md").read_text(), push_skill
     assert "`steps` holds each step's state" in (SKILLS / "verifying-a-deploy" / "SKILL.md").read_text()
+
+
+def test_local_sqlite_files_and_statamic_form_submissions_stay_out_of_the_zip():
+    # FlyAway devsite, 2026-11-18: a local database/database.sqlite and the local storage/forms submissions
+    # rode in code.zip. The platform's database is MySQL, and a devsite's form submissions are the server's.
+    for reference in ("laravel.md", "statamic.md"):
+        patterns = deployignore_patterns(PUSHING_REFERENCES / reference)
+        assert "database/*.sqlite*" in patterns, reference
+        assert [pattern for pattern in patterns if pattern.startswith(("database/migrations", "database/seeders"))] == []
+    assert "storage/forms/*" in deployignore_patterns(PUSHING_REFERENCES / "statamic.md")
+
+
+@pytest.mark.parametrize("reference", ("laravel.md", "statamic.md"))
+def test_the_log_level_is_the_platforms_and_an_info_channel_is_how_production_keeps_info_lines(reference):
+    # envwriter.go: LOG_LEVEL is debug on a devsite and warning on production, by design, and .env.16h cannot
+    # change it. A channel of the app's own keeps info lines, written to the one log file every server can write.
+    env_16h_section = with_single_spaces(markdown_section((PUSHING_REFERENCES / reference).read_text(), "## .env.16h"))
+    assert "`LOG_LEVEL`" in env_16h_section and "`warning` on production" in env_16h_section
+    assert "by design" in env_16h_section and "never by raising `LOG_LEVEL`" in env_16h_section
+    assert "'level' => 'info'" in env_16h_section and "storage_path('logs/laravel.log')" in env_16h_section
+
+
+def roll_back_section():
+    body = (SKILLS / "pushing-to-staging" / "SKILL.md").read_text()
+    return with_single_spaces(body.split("## Roll back", 1)[1].split("\n## ", 1)[0])
+
+
+def test_a_rollback_after_a_flip_back_offers_that_pushs_database_and_files_or_the_push_before_it():
+    # outcome_recorder.py's flip-back message and the preview's pass-over rule (spec §7.7, 2026-11-18).
+    section = roll_back_section()
+    assert "`deploy_state: flipped_back`" in section and "`site_plan(site_key, rollback=true)`" in section
+    assert "the code is already back" in section
+    assert "that push's database and files" in section and "the push before it" in section
+    verifying = (SKILLS / "verifying-a-deploy" / "SKILL.md").read_text()
+    failed_row = next(line for line in verifying.splitlines() if line.startswith("| `failed` |"))
+    assert "`deploy_state: flipped_back`" in failed_row and "*Roll back*" in failed_row
+    releasing = (SKILLS / "releasing-to-production" / "SKILL.md").read_text()
+    assert "*Roll back*" in releasing and "`deploy_state: flipped_back`" in releasing
+    using_16h = (SKILLS / "using-16h" / "SKILL.md").read_text()
+    pushing_line = next(line for line in using_16h.splitlines() if line.startswith("- `pushing-to-staging`"))
+    assert '"roll it back"' in pushing_line
+
+
+def test_reading_a_rollback_plan_says_cant_count_for_a_null_rows_added():
+    # rows_added: null is a table the platform cannot count (no counter, or a restore point taken before
+    # database-after.json, 2026-11-19), never "no rows".
+    section = roll_back_section()
+    assert "`database.tables_with_new_rows`" in section and "`rows_added`" in section
+    assert "`rows_added: null`" in section and "can't count" in section and "may be lost" in section
+    assert "not \"no rows\"" in section and "`if_the_database_stays`" in section
+    assert "`roll_back_code`" in section and "`site_push(site_key, plan_id, parts=[], answers)`" in section
+
+
+def test_a_rollback_mints_no_wp_admin_login():
+    assert "A rollback mints no wp-admin login" in roll_back_section()
+    verifying = (SKILLS / "verifying-a-deploy" / "SKILL.md").read_text()
+    login_paragraph = next(line for line in verifying.splitlines() if line.startswith("`wp_admin_login_url` comes"))
+    assert "a rollback mints none" in login_paragraph
+
+
+def test_no_reference_says_a_rollback_is_only_pushing_the_previous_code_again():
+    for reference in REFERENCES:
+        text = with_single_spaces((PUSHING_REFERENCES / reference).read_text())
+        if "Rolling back" in text:
+            assert "`rollback=true`" in text.split("Rolling back", 1)[1].split(". ", 1)[0], reference
+
+
+def test_wordpress_always_sends_the_siteurl_and_both_sizes():
+    # wp-16h-demo, 2026-11-19: a plan without the local siteurl asks no rewrite_urls question, so a
+    # database push imported the local URLs as they were.
+    step_3 = with_single_spaces((SKILLS / "pushing-to-staging" / "SKILL.md").read_text().split("## Step 3", 1)[1]
+                                .split("## Step 4", 1)[0])
+    rule = step_3.split("On WordPress, always send", 1)[1].split(". ", 2)
+    assert "`siteurl`, `db_size_bytes` and `uploads_size_bytes`" in rule[0]
+    assert "no `rewrite_urls` question" in rule[1] and "local URLs" in rule[1]

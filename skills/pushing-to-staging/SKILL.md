@@ -1,6 +1,6 @@
 ---
 name: pushing-to-staging
-description: Use when the developer wants their change somewhere they can look at it before it goes live — "put this on staging", "push my changes", "give me a devsite", "I want to see it before it goes live", "send the fix to the devsite".
+description: Use when the developer wants their change somewhere they can look at it before it goes live — "put this on staging", "push my changes", "give me a devsite", "I want to see it before it goes live", "send the fix to the devsite". Also when a push failed or flipped back, or the developer says "roll it back", "undo that push".
 ---
 
 # Push to staging
@@ -83,7 +83,7 @@ uploads_size_bytes=$(( $(du -sk wp-content/uploads | cut -f1) * 1024 ))
 code_size_bytes=$(( $(du -sk . | cut -f1) * 1024 ))
 ```
 
-Keys, exactly: `folder_name`, `siteurl`, `php`, `db_size_bytes`, `uploads_size_bytes`, `code_size_bytes`, `git` = {`present`, `remote_url`, `branch`, `shape`}, `docroot_guess` (copied from the project block's `docroot_guess` line; leave it out of `local_facts` when the block has no such line). Leave out any key you could not measure, never a guess; `git.present` is always sent, `true` or `false`. Then `site_plan(client?, app, local_facts)`, `app` = `wordpress`|`laravel`|`statamic`|`symfony`|`phpapp`|`files` — the hook's `app`, or `files` for a static site the developer asked for. For `drupal` or `joomla`, plan once with that `app`, read the refusal to the developer, and stop.
+Keys, exactly: `folder_name`, `siteurl`, `php`, `db_size_bytes`, `uploads_size_bytes`, `code_size_bytes`, `git` = {`present`, `remote_url`, `branch`, `shape`}, `docroot_guess` (copied from the project block's `docroot_guess` line; leave it out of `local_facts` when the block has no such line). Leave out any key you could not measure, never a guess; `git.present` is always sent, `true` or `false`. On WordPress, always send `siteurl`, `db_size_bytes` and `uploads_size_bytes`: the commands above measure all three, and one is left out only when its command failed, said to the developer. Without `siteurl` the plan asks no `rewrite_urls` question, and a database push imports the local URLs as they are. Then `site_plan(client?, app, local_facts)`, `app` = `wordpress`|`laravel`|`statamic`|`symfony`|`phpapp`|`files` — the hook's `app`, or `files` for a static site the developer asked for. For `drupal` or `joomla`, plan once with that `app`, read the refusal to the developer, and stop.
 
 The name comes from `folder_name`. A taken one is refused with two others — `name X.devsite.co.nz is taken — try X2.devsite.co.nz or X-<client>.devsite.co.nz`. If the taken name is one of `site_status`'s `devsites`, or the project itself with `type: dev`, it is the developer's own site: take the *later* path with that `site_key`, never a second devsite. Only otherwise offer the two names, the first as the default, ask once, and plan again with `folder_name` set to the label they chose (`X2`). `site_key` on `site_plan` means a site that already exists, so it cannot pick a new name.
 
@@ -105,7 +105,7 @@ The name comes from `folder_name`. A taken one is refused with two others — `n
 Write `.deployignore` in the site root if it is absent; if it is there, add each line below that it lacks and rewrite any `dir/` line as `dir/*`. Take out a line that leaves out the whole of `vendor/` on every app but WordPress and a static site, and the whole of `storage/`, `content/` or `users/` on laravel, statamic and symfony: those folders travel, as each reference says. Show it.
 
 - WordPress: `wp-content/uploads/*`, `wp-content/cache/*`, `wp-content/upgrade/*`, `node_modules/*`, `.git/*`, `.env`, `wp-config.php`, `docs/16h/*`, `*.sql`, `*.sql.gz`, `*.zip`
-- Laravel and Statamic: `node_modules/*`, `storage/logs/*.log`, `bootstrap/cache/*.php`, `public/hot`, `public/storage/*`, `.env`, `.env.16h`, `.env.*`, `auth.json`, `.git/*`, `docs/16h/*`, `*.sql`, `*.sql.gz`, `*.zip` — `vendor/` and `storage/` travel (and Statamic's `content/` and `users/`), for the reasons in its reference
+- Laravel and Statamic: `node_modules/*`, `storage/logs/*.log`, `bootstrap/cache/*.php`, `database/*.sqlite*`, `public/hot`, `public/storage/*`, `.env`, `.env.16h`, `.env.*`, `auth.json`, `.git/*`, `docs/16h/*`, `*.sql`, `*.sql.gz`, `*.zip`, and on Statamic `storage/forms/*` — `vendor/` and `storage/` travel (and Statamic's `content/` and `users/`), for the reasons in its reference
 - Symfony: `node_modules/*`, `var/cache/*`, `var/log/*`, `.env`, `.env.16h`, `.env.*`, `.env.local.php`, `auth.json`, `.git/*`, `docs/16h/*`, `*.sql`, `*.sql.gz`, `*.zip` — `vendor/` travels
 - phpapp: `node_modules/*`, `.env`, `.env.16h`, `.env.*`, `auth.json`, `.git/*`, `docs/16h/*`, `*.sql`, `*.sql.gz`, `*.zip`
 - files: `.git/*`, `docs/16h/*`, `*.sql`, `*.sql.gz`, `*.zip` — the zip is the chosen folder's contents
@@ -152,7 +152,7 @@ A new site takes a push once `site_status(site_key)` says `accepted`. `requested
 
 `site_push(site_key, plan_id, parts)` — `parts` names what reached its POST: `code`, plus `env` when you built one (Symfony always does), and `database` or `uploads` only on WordPress. It returns a `task_id`. Then `verifying-a-deploy`: it polls with that `task_id`, reads every `state`, and hands back the URL and, for WordPress, the one-shot wp-admin login.
 
-When a push comes back failed with deploy_state flipped_back, or the developer says the site broke after a push: read the error with logs_read, then offer the three moves in plain words — push a fix, roll back the code, or roll back code, database and files (site_plan with rollback=true, read what_will_change to them, then site_push with parts=[]).
+When it comes back `failed` with `deploy_state: flipped_back`, or the developer says the site broke after it: *Roll back the last change* below.
 
 ## Push a later change to a devsite that exists
 
@@ -164,3 +164,18 @@ Same verbs, one more argument. **Never plan by folder name for a site that is al
 4. `site_push(site_key, plan_id, parts, answers)` — **every** answer, or it refuses and names the missing one; `database` in `parts` needs `include_database: true`. Then `verifying-a-deploy`, as above.
 
 **Going live** is `releasing-to-production`, never this skill.
+
+## Roll back the last change
+
+When a push comes back `failed` with `deploy_state: flipped_back`, or the developer says the site broke after a push: read the error with `logs_read`, then offer the three moves in plain words — push a fix, roll back the code, or roll back code, database and files.
+
+**After a flip-back the code is already back** on the release before; the push's database, files and config are as it left them. A rollback undoes the site's last change: `site_plan(site_key, rollback=true)` offers that push's database and files when it changed them, and when it changed neither, the push before it, its code included. Say which before the questions. On production, plan with `type: "production"` too.
+
+Read `what_will_change` to the developer:
+
+- `live_release` → `back_to`: the release serving now, and the one that comes back. `undoes` is there when the last change was itself a rollback.
+- `database.tables_with_new_rows`: each table's `rows_added`, the rows written since the change, which a database rollback takes away. `rows_added: null` means the platform cannot count that table's new rows (it has no counter, or the restore point is from before 19 Nov 2026), not "no rows": say "can't count", and treat them as rows that may be lost. `rows_may_be_lost: true` marks a log or cache table, whose rows are safe to lose. `could_not_count` means no table could be counted.
+- `files`: what the files part puts back.
+- `if_the_database_stays`: what a code-only rollback leaves. Read it before asking `roll_back_database`.
+
+Then ask `roll_back_code`, `roll_back_database` and `roll_back_files` (each defaults to yes; only the parts the restore point holds are asked), and on production `confirm`. `site_push(site_key, plan_id, parts=[], answers)`, on production with `confirm: true` and `digest` as `releasing-to-production` sends them, then `verifying-a-deploy`. A production database rollback is refused while rows may be lost; code and files still go back. A rollback mints no wp-admin login; only a push does. When the plan refuses, read its sentence: pushing the previous code again still rolls the code back.
