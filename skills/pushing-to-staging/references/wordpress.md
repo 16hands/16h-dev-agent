@@ -50,6 +50,7 @@ code_size_bytes=$(( $(du -sk . | cut -f1) * 1024 ))
 - `du -sk` then ×1024, because macOS `du` has no `-b`.
 - `php` is `major.minor` only (`8.3`, not `8.3.14`). The plan matches it to a
   fleet pool and falls back to `8.3`.
+- Leave `siteurl` out and a database push refuses: "rewrite_urls needs your local site's URL: plan again with siteurl in the facts (wp option get siteurl), or answer rewrite_urls=false if the database already uses https://<host>". Send `siteurl`, or answer `rewrite_urls=false`.
 - If `siteurl` and `home` differ, say so when you ask `rewrite_urls` — only
   `siteurl` is rewritten by the lane.
 - **Multisite** (`wp core is-installed --network`) is not supported by the

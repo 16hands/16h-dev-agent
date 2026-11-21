@@ -19,11 +19,11 @@ A push is done when `site_status` says `applied` and the site answers, not when 
 | `refused` | creation was refused | read `message`; re-plan or stop |
 | `pushing` | the deploy lane is running | keep polling; when `message` changes, show it in one line |
 | `applied` | live on `url`; `release` names the release it made live | step 2 |
-| `failed` | the lane stopped, or the first-minute check put the code back (`deploy_state: flipped_back`); the previous release serves | read `message` verbatim; push a fix, or roll back (`pushing-to-staging`, *Roll back*) |
+| `failed` | the lane stopped, or the first-minute check put the code back (`deploy_state: flipped_back`); `live_release` is the release the site serves now (left out when the platform does not know) | read `message` verbatim; push a fix, or roll back (`pushing-to-staging`, *Roll back*) |
 
 While `pushing`, the server reports its phases (unpacking, scanning, migrations, switching) in `message`: show each new one to the developer once, in the server's own words, and say nothing when it has not changed. The scan of a big `vendor/` takes about a minute, so a long "Scanning" line is the server working, not stuck.
 
-While `pushing`, `steps` holds each step's state (`waiting`, `started`, `finished`, `failed`, `warned`, `off`). Keep showing `message` as above; when a step turns `failed`, name it beside `message`.
+While `pushing`, `steps` holds each step's state (`waiting`, `started`, `finished`, `failed`, `warned`, `off`, `not_run`). `off` is a part this push did not carry (the database steps on a code-only push); `not_run` is a step the push never reached because it failed first. Keep showing `message` as above; when a step turns `failed`, name it beside `message`. A flip-back shows in `message` as soon as master confirms it ("the code is back on Y — checking every server serves it"), before `state` turns `failed`. `pushed_at` and `finished_at` time the push; `lane` (`machine` or `direct`) is information only.
 
 `wp_admin_login_url` comes after a WordPress push has `applied` (a rollback mints none), only to the identity that pushed, and it is one-shot: hand it over, do not open it yourself, and do not repeat it later. While `message` says the login is being minted, ask again in about twenty seconds.
 

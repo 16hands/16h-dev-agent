@@ -379,7 +379,7 @@ def test_reading_a_rollback_plan_says_cant_count_for_a_null_rows_added():
     # database-after.json, 2026-11-19), never "no rows".
     section = roll_back_section()
     assert "`database.tables_with_new_rows`" in section and "`rows_added`" in section
-    assert "`rows_added: null`" in section and "can't count" in section and "may be lost" in section
+    assert "`database.tables_not_counted`" in section and "can't count" in section and "may be lost" in section
     assert "not \"no rows\"" in section and "`if_the_database_stays`" in section
     assert "`roll_back_code`" in section and "`site_push(site_key, plan_id, parts=[], answers)`" in section
 
@@ -405,4 +405,34 @@ def test_wordpress_always_sends_the_siteurl_and_both_sizes():
                                 .split("## Step 4", 1)[0])
     rule = step_3.split("On WordPress, always send", 1)[1].split(". ", 2)
     assert "`siteurl`, `db_size_bytes` and `uploads_size_bytes`" in rule[0]
-    assert "no `rewrite_urls` question" in rule[1] and "local URLs" in rule[1]
+    assert "refuses" in rule[1] and "send `siteurl`" in rule[1]
+
+
+def test_the_poll_fields_are_documented():
+    verifying = with_single_spaces((SKILLS / "verifying-a-deploy" / "SKILL.md").read_text())
+    steps_paragraph = verifying.split("While `pushing`, `steps` holds", 1)[1].split("\n\n", 1)[0]
+    assert "`off` is a part this push did not carry" in steps_paragraph
+    assert "`not_run` is a step the push never reached because it failed first" in steps_paragraph
+    assert "`finished_at`" in verifying and "`pushed_at`" in verifying
+    assert "`lane`" in verifying and "information only" in verifying
+    failed_row = next(line for line in (SKILLS / "verifying-a-deploy" / "SKILL.md").read_text().splitlines()
+                      if line.startswith("| `failed` |"))
+    assert "`live_release`" in failed_row and "serves now" in failed_row
+    assert "checking every server serves it" in verifying
+
+
+def test_tables_not_counted_is_documented():
+    section = roll_back_section()
+    assert "`database.tables_not_counted`" in section and "`rows_may_be_lost`" in section
+    assert "could not count" in section and "rows may be lost" in section
+    assert "config" in section and "`.env`" in section and "today's secrets" in section
+
+
+def test_the_rewrite_refusal_names_its_move():
+    # 1bbf176b / 36d2e81b: the plan asks rewrite_urls even with no siteurl; the push then refuses.
+    step_3 = with_single_spaces((SKILLS / "pushing-to-staging" / "SKILL.md").read_text().split("## Step 3", 1)[1]
+                                .split("## Step 4", 1)[0])
+    assert "rewrite_urls needs your local site's URL" in step_3
+    assert "send `siteurl`" in step_3 and "`rewrite_urls=false`" in step_3
+    wordpress = with_single_spaces((PUSHING_REFERENCES / "wordpress.md").read_text())
+    assert "rewrite_urls needs your local site's URL" in wordpress and "`rewrite_urls=false`" in wordpress
