@@ -374,9 +374,9 @@ def test_a_rollback_after_a_flip_back_offers_that_pushs_database_and_files_or_th
     assert '"roll it back"' in pushing_line
 
 
-def test_reading_a_rollback_plan_says_cant_count_for_a_null_rows_added():
-    # rows_added: null is a table the platform cannot count (no counter, or a restore point taken before
-    # database-after.json, 2026-11-19), never "no rows".
+def test_reading_a_rollback_plan_says_cant_count_for_the_tables_not_counted():
+    # A table the platform cannot count (no counter, or a restore point taken before database-after.json,
+    # 2026-11-19) is in tables_not_counted, never in tables_with_new_rows, and is never "no rows".
     section = roll_back_section()
     assert "`database.tables_with_new_rows`" in section and "`rows_added`" in section
     assert "`database.tables_not_counted`" in section and "can't count" in section and "may be lost" in section
@@ -399,8 +399,9 @@ def test_no_reference_says_a_rollback_is_only_pushing_the_previous_code_again():
 
 
 def test_wordpress_always_sends_the_siteurl_and_both_sizes():
-    # wp-16h-demo, 2026-11-19: a plan without the local siteurl asks no rewrite_urls question, so a
-    # database push imported the local URLs as they were.
+    # wp-16h-demo, 2026-11-19: a plan without the local siteurl asked no rewrite_urls question, so a
+    # database push imported the local URLs as they were. The plan now asks the rewrite (default yes) when
+    # it cannot read the siteurl, and site_push of a database refuses it, so the skill always sends it.
     step_3 = with_single_spaces((SKILLS / "pushing-to-staging" / "SKILL.md").read_text().split("## Step 3", 1)[1]
                                 .split("## Step 4", 1)[0])
     rule = step_3.split("On WordPress, always send", 1)[1].split(". ", 2)
@@ -411,7 +412,8 @@ def test_wordpress_always_sends_the_siteurl_and_both_sizes():
 def test_the_poll_fields_are_documented():
     verifying = with_single_spaces((SKILLS / "verifying-a-deploy" / "SKILL.md").read_text())
     steps_paragraph = verifying.split("While `pushing`, `steps` holds", 1)[1].split("\n\n", 1)[0]
-    assert "`off` is a part this push did not carry" in steps_paragraph
+    assert ("`off` is a step this push does not run: switched off in the plan, or one for a part it "
+            "did not carry") in steps_paragraph
     assert "`not_run` is a step the push never reached because it failed first" in steps_paragraph
     assert "`finished_at`" in verifying and "`pushed_at`" in verifying
     assert "`lane`" in verifying and "information only" in verifying
